@@ -33,7 +33,6 @@ func (c *ClaudeAgent) Generate(prompt string, needsWebFetch bool, needsFileRead 
 	}
 
 	args := []string{
-		"--bare",
 		"-p", prompt,
 		"--tools", tools,
 		"--allowedTools", tools,
