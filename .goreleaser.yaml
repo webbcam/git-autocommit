@@ -1,0 +1,38 @@
+version: 2
+
+project_name: git-autocommit
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    binary: git-autocommit
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+brews:
+  - name: git-autocommit
+    repository:
+      owner: webbcam
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/webbcam/git-autocommit"
+    description: "AI-powered automatic git commit message generator"
+    install: |
+      bin.install "git-autocommit"
+
+release:
+  github:
+    owner: webbcam
+    name: git-autocommit

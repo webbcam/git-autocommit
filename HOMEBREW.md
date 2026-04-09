@@ -8,28 +8,33 @@ The module is already named `github.com/webbcam/git-autocommit`. Ensure the repo
 
 Create a new public GitHub repo named `webbcam/homebrew-tap`.
 
-## 3. Add GoReleaser
+## 3. Create a Personal Access Token (PAT)
 
-[GoReleaser](https://goreleaser.com/) handles cross-platform builds, GitHub Releases, and Homebrew formula updates automatically.
+GoReleaser needs write access to `webbcam/homebrew-tap` to push the formula. The default `GITHUB_TOKEN` only covers the current repo.
 
-Add a `.goreleaser.yaml` to the root of this repo. It should:
+1. Go to GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+2. Create a token with **Contents: Read and Write** access scoped to the `webbcam/homebrew-tap` repo
+3. In the `webbcam/git-autocommit` repo, go to Settings → Secrets and variables → Actions
+4. Add a secret named `HOMEBREW_TAP_GITHUB_TOKEN` with the token value
 
-- Build binaries for `darwin/amd64`, `darwin/arm64`, and `linux/amd64`
-- Archive each binary as a `.tar.gz`
-- Create a GitHub Release with the archives attached
-- Generate and commit a Homebrew formula to `webbcam/homebrew-tap` under `Formula/git-autocommit.rb`
+## 4. GoReleaser config
 
-The formula should call `bin.install "git-autocommit"` in its install block.
+A `.goreleaser.yaml` is included at the root of this repo. It:
 
-## 4. Set up GitHub Actions
+- Builds binaries for `darwin/amd64` and `darwin/arm64`
+- Archives each binary as a `.tar.gz`
+- Creates a GitHub Release with the archives attached
+- Generates and commits a Homebrew formula to `webbcam/homebrew-tap` under `Formula/git-autocommit.rb`
 
-Add a workflow (e.g. `.github/workflows/release.yml`) that:
+## 5. GitHub Actions workflow
+
+A workflow at `.github/workflows/release.yml`:
 
 - Triggers on pushed tags matching `v*`
 - Runs `goreleaser release`
-- Has a `GITHUB_TOKEN` with write access to both this repo and `webbcam/homebrew-tap`
+- Uses `GITHUB_TOKEN` (auto-provided) for the release and `HOMEBREW_TAP_GITHUB_TOKEN` (from step 3) for the tap
 
-## 5. Tag and release
+## 6. Tag and release
 
 ```sh
 git tag v0.1.0
@@ -38,7 +43,7 @@ git push origin v0.1.0
 
 The Actions workflow will build the binaries, publish the GitHub Release, and update the tap formula automatically.
 
-## 6. Verify installation
+## 7. Verify installation
 
 Once the release is live:
 
