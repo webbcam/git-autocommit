@@ -184,6 +184,15 @@ Commit with this message? [y/N]
 
 Pass `--skip` to bypass the prompt and commit immediately.
 
+## Releasing
+
+Releases are automated via GoReleaser and GitHub Actions. On a pushed `v*` tag, the workflow builds binaries for `darwin/amd64` and `darwin/arm64`, publishes a GitHub Release, and updates the Homebrew formula in `webbcam/homebrew-tap`.
+
+```sh
+git tag v0.x.x
+git push origin v0.x.x
+```
+
 ## Prerequisites
 
 - `git` on `$PATH`
