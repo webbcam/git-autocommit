@@ -1,17 +1,17 @@
-# git-ai-commit
+# git-autocommit
 
 A CLI tool that generates git commit messages using an AI agent, then performs the commit.
 
 ## How It Works
 
-`git-ai-commit` constructs a prompt describing the diff to examine and the desired commit message format, sends it to a configured AI agent (e.g. the Claude CLI), parses the generated message from the output, and performs the appropriate git operation.
+`git-autocommit` constructs a prompt describing the diff to examine and the desired commit message format, sends it to a configured AI agent (e.g. the Claude CLI), parses the generated message from the output, and performs the appropriate git operation.
 
 ## Installation
 
 ### Homebrew
 
 ```sh
-brew install webbcam/tap/git-ai-commit
+brew install webbcam/tap/git-autocommit
 ```
 
 ### Build from source
@@ -19,10 +19,10 @@ brew install webbcam/tap/git-ai-commit
 Requires Go 1.21+.
 
 ```sh
-git clone https://github.com/webbcam/git-ai-commit
-cd git-ai-commit
-go build -o git-ai-commit .
-mv git-ai-commit /usr/local/bin/
+git clone https://github.com/webbcam/git-autocommit
+cd git-autocommit
+go build -o git-autocommit .
+mv git-autocommit /usr/local/bin/
 ```
 
 ## Configuration
@@ -31,7 +31,7 @@ Configuration is required — either a config file, environment variables, or bo
 
 ### Config file
 
-Create `~/.config/git-ai-commit/config.toml`:
+Create `~/.config/git-autocommit/config.toml`:
 
 ```toml
 [agent]
@@ -52,14 +52,14 @@ Environment variables override config file values:
 
 | Variable | Description |
 |---|---|
-| `GIT_AI_COMMIT_AGENT_TYPE` | Agent type |
-| `GIT_AI_COMMIT_AGENT_BINARY` | Agent binary |
-| `GIT_AI_COMMIT_MODEL` | Model name/alias |
+| `GIT_AUTOCOMMIT_AGENT_TYPE` | Agent type |
+| `GIT_AUTOCOMMIT_AGENT_BINARY` | Agent binary |
+| `GIT_AUTOCOMMIT_MODEL` | Model name/alias |
 
 ## Usage
 
 ```
-git-ai-commit [options]
+git-autocommit [options]
 ```
 
 ### Options
@@ -82,7 +82,7 @@ Generates a message for currently staged changes and commits them.
 
 ```sh
 git add .
-git-ai-commit
+git-autocommit
 ```
 
 Requires staged changes — exits with an error if nothing is staged.
@@ -98,9 +98,9 @@ Squashes multiple commits into one with a new AI-generated message.
 | `REF1..REF2` | Squash a range via interactive rebase |
 
 ```sh
-git-ai-commit --squash 3              # squash last 3 commits
-git-ai-commit --squash abc123         # squash from abc123 to HEAD
-git-ai-commit --squash abc123..HEAD   # squash range via rebase
+git-autocommit --squash 3              # squash last 3 commits
+git-autocommit --squash abc123         # squash from abc123 to HEAD
+git-autocommit --squash abc123..HEAD   # squash range via rebase
 ```
 
 ### Rewrite (`--rewrite [REF]`)
@@ -108,9 +108,9 @@ git-ai-commit --squash abc123..HEAD   # squash range via rebase
 Regenerates the commit message for an existing commit without changing its content.
 
 ```sh
-git-ai-commit --rewrite               # amend the last commit's message
-git-ai-commit --rewrite HEAD~2        # rewrite a specific commit via rebase
-git-ai-commit --rewrite abc123        # rewrite by SHA
+git-autocommit --rewrite               # amend the last commit's message
+git-autocommit --rewrite HEAD~2        # rewrite a specific commit via rebase
+git-autocommit --rewrite abc123        # rewrite by SHA
 ```
 
 When rewriting a non-HEAD commit, any uncommitted changes are stashed before the rebase and restored after.
@@ -141,7 +141,7 @@ A structured, multi-section message:
 A single-line message, maximum 72 characters.
 
 ```sh
-git-ai-commit --informal
+git-autocommit --informal
 ```
 
 ## Additional context (`--context VALUE`)
@@ -155,9 +155,9 @@ Provides supplementary information to the AI. The type is auto-detected:
 | Plain string | Everything else | Included directly in the prompt |
 
 ```sh
-git-ai-commit --context ./TICKET-123.md
-git-ai-commit --context https://linear.app/team/issue/ENG-456
-git-ai-commit --context "Part of the auth refactor — keep the message focused on session handling"
+git-autocommit --context ./TICKET-123.md
+git-autocommit --context https://linear.app/team/issue/ENG-456
+git-autocommit --context "Part of the auth refactor — keep the message focused on session handling"
 ```
 
 ## Confirmation flow

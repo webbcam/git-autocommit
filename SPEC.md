@@ -1,19 +1,17 @@
-# git-ai-commit — Specification
+# git-autocommit — Specification
 
 A CLI tool that generates git commit messages using an AI agent, then performs the commit.
 
 ## Prerequisites
 
 - `git` — the tool operates inside a git repository
-- An AI CLI agent capable of:
-  - Executing shell commands (to run `git diff`, `git show`, etc.)
-  - Reading local files (for `--context` with a file path)
-  - Fetching web URLs (for `--context` with a URL)
-- The AI agent is invoked non-interactively and must return output containing the generated message wrapped in known delimiters
+- A supported AI agent (see Agent Configuration below)
 
 ## Core Concept
 
-The tool constructs a prompt describing what diff to examine and what commit message format to use, sends it to an AI agent, parses the generated message from the output using delimiters, and then performs the appropriate git operation (commit, amend, squash, or rewrite).
+The tool runs the appropriate git command itself to obtain the diff, constructs a prompt containing the diff output and the desired commit message format, sends it to a configured AI agent, parses the generated message from the output using delimiters, and then performs the appropriate git operation (commit, amend, squash, or rewrite).
+
+The AI agent is only responsible for reading the prompt and generating text — it does not need shell access or tool use capabilities.
 
 ## Modes of Operation
 
@@ -24,7 +22,7 @@ The tool has four mutually exclusive modes. If none of `--squash`, `--rewrite` a
 Commits currently staged changes (`git diff --cached`).
 
 - Precondition: there must be staged changes, otherwise exit with an error
-- The AI agent is told to run `git diff --cached` and summarize the staged changes
+- The tool runs `git diff --cached` and includes the output in the prompt
 
 ### 2. Squash (`--squash VALUE`)
 
@@ -37,7 +35,7 @@ Squashes multiple commits into one with a new AI-generated message. The argument
 | `REF1..REF2` | Squash a range within history via interactive rebase. REF1 must be an ancestor of REF2. The first commit in the range is reworded, the rest are fixup'd. |
 
 - Validation: for integer N, must be ≥ 2 (error otherwise, suggest `--rewrite`). For refs, validate they exist via `git rev-parse`. For ranges, verify ancestry.
-- The AI agent is told to run the appropriate `git diff` spanning the squash range
+- The tool runs the appropriate `git diff` spanning the squash range and includes the output in the prompt
 
 ### 3. Rewrite (`--rewrite [REF]`)
 
@@ -49,7 +47,7 @@ Regenerates the commit message for an existing commit without changing its conte
 | A ref (SHA, HEAD~N, etc.) | Rewrite a specific commit's message via interactive rebase (reword) |
 
 - When rewriting a non-HEAD commit: stash any uncommitted changes before rebasing, restore after
-- The AI agent is told to run `git diff HEAD~1 HEAD` (last commit) or `git show <SHA> --format= -p` (specific commit)
+- The tool runs `git diff HEAD~1 HEAD` (last commit) or `git show <SHA> --format= -p` (specific commit) and includes the output in the prompt
 
 ## Message Styles
 
@@ -74,7 +72,7 @@ A multi-section commit message following this template:
 <ticket URL>
 ```
 
-The AI should be given an example of this format in the prompt. The `[Jira]` field should default to the placeholder `JIRA-XXXXX`.
+The AI should be given an example of this format in the prompt. The `[Ticket]` field should default to the placeholder `JIRA-XXXXX`.
 
 ### Informal
 
@@ -98,13 +96,13 @@ Unknown options should print an error and show usage.
 
 ## Additional Context (`--context VALUE`)
 
-Provides supplementary information to the AI when generating the message. The type is auto-detected:
+Provides supplementary information to the AI when generating the message. The type is auto-detected and resolved by the tool before the prompt is sent:
 
-| VALUE type | Detection | AI instruction |
+| VALUE type | Detection | Behaviour |
 |---|---|---|
-| File path | File exists on disk (`-f` test) | Tell the AI to read the file for additional context |
-| URL | Starts with `http://` or `https://` | Tell the AI to fetch and review the URL for additional context |
-| Plain string | Everything else | Include the string directly in the prompt as additional context |
+| File path | File exists on disk | Tool reads the file and includes its contents in the prompt |
+| URL | Starts with `http://` or `https://` | Tool fetches the URL and includes the response body in the prompt |
+| Plain string | Everything else | Included directly in the prompt as-is |
 
 This is appended to the prompt after the main instructions.
 
@@ -128,20 +126,20 @@ When `--skip` is passed, the commit happens immediately with no prompt.
 
 ### Agent Configuration
 
-The AI agent should be invoked with a minimal/lightweight profile that only has shell execution capability. This avoids the startup overhead of MCP servers and other tools that aren't needed — the tool only requires the agent to run git commands and return text.
+The AI agent requires no special capabilities — it only needs to receive a text prompt and return a text response. No shell access, tool use, or external API calls are required from the agent.
 
-When `--context` is used with a file path or URL, the agent also needs file-read and web-fetch capabilities respectively.
+Supported agent types are defined in the config file (see Configuration).
 
 ### Prompt Construction
 
-1. Determine the appropriate `git diff` or `git show` command based on the mode
-2. Build a prompt that tells the AI to:
-   - Run that specific git command
-   - Write a commit message in the chosen style summarizing the diff
-   - Wrap the message between unique delimiters (e.g., `===COMMIT_MSG_START===` and `===COMMIT_MSG_END===`)
-   - Output nothing outside the delimiters
-3. If `--context` is provided, append the context instruction
-4. Send the prompt to the AI agent non-interactively
+1. Run the appropriate git command (`git diff --cached`, `git show <SHA>`, etc.) and capture the output
+2. If `--context` is a file path, read the file contents; if a URL, fetch the response body
+3. Build a prompt containing:
+   - The diff output inline
+   - The commit message style instructions and template
+   - Any additional context (file contents, URL body, or plain string)
+   - Instructions to wrap the output between delimiters (`===COMMIT_MSG_START===` and `===COMMIT_MSG_END===`) and output nothing else
+4. Send the prompt to the AI agent
 
 ### Response Parsing
 
@@ -160,6 +158,7 @@ When `--context` is used with a file path or URL, the agent also needs file-read
 | Range where REF1 is not ancestor of REF2 | Error with explanation |
 | AI fails to produce a message | Error: "Failed to generate commit message." |
 | `--context` with no argument | Error: "--context requires a value." |
+| `--context` URL fetch fails | Error: "Failed to fetch context URL: <url>" |
 | Unknown option | Error + print usage |
 
 All errors exit with code 1.

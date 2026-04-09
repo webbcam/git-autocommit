@@ -1,4 +1,4 @@
-module github.com/webbcam/git-ai-commit
+module github.com/webbcam/git-autocommit
 
 go 1.21
 

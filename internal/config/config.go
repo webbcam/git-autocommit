@@ -8,7 +8,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Config holds the configuration for git-ai-commit.
+// Config holds the configuration for git-autocommit.
 type Config struct {
 	Agent AgentConfig `toml:"agent"`
 }
@@ -37,13 +37,13 @@ func Load() (*Config, error) {
 	}
 
 	// Apply environment variable overrides
-	if v := os.Getenv("GIT_AI_COMMIT_AGENT_TYPE"); v != "" {
+	if v := os.Getenv("GIT_AUTOCOMMIT_AGENT_TYPE"); v != "" {
 		cfg.Agent.Type = v
 	}
-	if v := os.Getenv("GIT_AI_COMMIT_AGENT_BINARY"); v != "" {
+	if v := os.Getenv("GIT_AUTOCOMMIT_AGENT_BINARY"); v != "" {
 		cfg.Agent.Binary = v
 	}
-	if v := os.Getenv("GIT_AI_COMMIT_MODEL"); v != "" {
+	if v := os.Getenv("GIT_AUTOCOMMIT_MODEL"); v != "" {
 		cfg.Agent.Model = v
 	}
 
@@ -51,9 +51,9 @@ func Load() (*Config, error) {
 	if cfg.Agent.Type == "" && cfg.Agent.Binary == "" && cfg.Agent.Model == "" {
 		return nil, fmt.Errorf(
 			"no configuration found. Create %s or set environment variables:\n"+
-				"  GIT_AI_COMMIT_AGENT_TYPE\n"+
-				"  GIT_AI_COMMIT_AGENT_BINARY\n"+
-				"  GIT_AI_COMMIT_MODEL",
+				"  GIT_AUTOCOMMIT_AGENT_TYPE\n"+
+				"  GIT_AUTOCOMMIT_AGENT_BINARY\n"+
+				"  GIT_AUTOCOMMIT_MODEL",
 			configPath,
 		)
 	}
@@ -77,5 +77,5 @@ func defaultConfigPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not determine home directory: %w", err)
 	}
-	return filepath.Join(home, ".config", "git-ai-commit", "config.toml"), nil
+	return filepath.Join(home, ".config", "git-autocommit", "config.toml"), nil
 }

@@ -265,7 +265,7 @@ func ParseSquashValue(val string) (isInt bool, intVal int, ref1, ref2 string, is
 
 // writeTempFile writes content to a temporary file and returns its path.
 func writeTempFile(content string) (string, error) {
-	f, err := os.CreateTemp("", "git-ai-commit-*")
+	f, err := os.CreateTemp("", "git-autocommit-*")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}

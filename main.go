@@ -6,17 +6,17 @@ import (
 	"os"
 	"strings"
 
-	"github.com/webbcam/git-ai-commit/internal/agent"
-	"github.com/webbcam/git-ai-commit/internal/config"
-	"github.com/webbcam/git-ai-commit/internal/git"
-	"github.com/webbcam/git-ai-commit/internal/parser"
-	"github.com/webbcam/git-ai-commit/internal/prompt"
+	"github.com/webbcam/git-autocommit/internal/agent"
+	"github.com/webbcam/git-autocommit/internal/config"
+	"github.com/webbcam/git-autocommit/internal/git"
+	"github.com/webbcam/git-autocommit/internal/parser"
+	"github.com/webbcam/git-autocommit/internal/prompt"
 )
 
-const usageText = `git-ai-commit — Generate git commit messages using AI
+const usageText = `git-autocommit — Generate git commit messages using AI
 
 Usage:
-  git-ai-commit [options]
+  git-autocommit [options]
 
 Options:
   --formal          Use formal multi-section commit message template (default)
@@ -28,13 +28,13 @@ Options:
   -h, --help        Print this usage information
 
 Examples:
-  git-ai-commit                      # Commit staged changes with AI-generated message
-  git-ai-commit --informal           # Single-line commit message
-  git-ai-commit --squash 3           # Squash last 3 commits
-  git-ai-commit --squash abc123..HEAD # Squash range via interactive rebase
-  git-ai-commit --rewrite            # Amend last commit message
-  git-ai-commit --rewrite abc123     # Rewrite a specific commit's message
-  git-ai-commit --context ./ticket.md # Use file as additional context
+  git-autocommit                      # Commit staged changes with AI-generated message
+  git-autocommit --informal           # Single-line commit message
+  git-autocommit --squash 3           # Squash last 3 commits
+  git-autocommit --squash abc123..HEAD # Squash range via interactive rebase
+  git-autocommit --rewrite            # Amend last commit message
+  git-autocommit --rewrite abc123     # Rewrite a specific commit's message
+  git-autocommit --context ./ticket.md # Use file as additional context
 `
 
 // options holds parsed CLI arguments.
