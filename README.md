@@ -118,6 +118,40 @@ base_url = "http://192.168.1.50:11434/v1/chat/completions"
 
 The remote machine must run Ollama with `OLLAMA_HOST=0.0.0.0 ollama serve` to accept connections from the network.
 
+#### `opencode` — OpenCode CLI
+
+Uses the [opencode](https://opencode.ai) CLI. Supports any provider/model that opencode is configured for.
+
+```toml
+[agent]
+type   = "opencode"
+model  = "anthropic/claude-opus-4-6"
+# binary = "opencode"  # default
+```
+
+| Field | Description |
+|---|---|
+| `type` | `opencode` |
+| `model` | Provider and model in `provider/model` format (e.g. `anthropic/claude-opus-4-6`, `openai/gpt-4o`). |
+| `binary` | Path to the opencode binary. Defaults to `opencode` (must be on `$PATH`). |
+
+#### `kiro` — Kiro CLI
+
+Uses the [kiro-cli](https://kiro.dev/docs/cli/). Model selection is configured globally in kiro-cli rather than per-invocation.
+
+```toml
+[agent]
+type = "kiro"
+# binary = "kiro-cli"  # default
+```
+
+| Field | Description |
+|---|---|
+| `type` | `kiro` |
+| `binary` | Path to the kiro-cli binary. Defaults to `kiro-cli` (must be on `$PATH`). |
+
+> **Note:** To change the model used by kiro, run `kiro-cli settings chat.defaultModel <model>`.
+
 ### Environment variables
 
 Environment variables override config file values:
