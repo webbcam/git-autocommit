@@ -26,8 +26,9 @@ const (
 
 // Context holds the additional context information.
 type Context struct {
-	Type  ContextType
-	Value string
+	Type    ContextType
+	Value   string // original path, URL, or string
+	Content string // resolved content (file body, URL body, or same as Value for strings)
 }
 
 // DetectContextType determines the type of context from the value string.
@@ -41,17 +42,7 @@ func DetectContextType(value string) Context {
 	if _, err := os.Stat(value); err == nil {
 		return Context{Type: ContextFile, Value: value}
 	}
-	return Context{Type: ContextString, Value: value}
-}
-
-// NeedsWebFetch returns true if the context requires web fetching capability.
-func (c Context) NeedsWebFetch() bool {
-	return c.Type == ContextURL
-}
-
-// NeedsFileRead returns true if the context requires file reading capability.
-func (c Context) NeedsFileRead() bool {
-	return c.Type == ContextFile
+	return Context{Type: ContextString, Value: value, Content: value}
 }
 
 const formalTemplate = `<subject line, 80 chars max>
@@ -66,15 +57,16 @@ const formalTemplate = `<subject line, 80 chars max>
 
 // Build constructs the prompt to send to the AI agent.
 //
-// gitCmd is the git command the agent should run to obtain the diff
-// (e.g., "git diff --cached" or "git show <SHA> --format= -p").
+// diff is the output of the git diff/show command.
 // style controls the commit message format.
-// ctx provides optional additional context.
-func Build(gitCmd string, style Style, ctx Context) string {
+// ctx provides optional additional context; ctx.Content must be pre-resolved.
+func Build(diff string, style Style, ctx Context) string {
 	var sb strings.Builder
 
 	sb.WriteString("You are a git commit message generator.\n\n")
-	sb.WriteString(fmt.Sprintf("Run the following git command to see the changes:\n\n  %s\n\n", gitCmd))
+	sb.WriteString("Here is the git diff:\n\n```diff\n")
+	sb.WriteString(diff)
+	sb.WriteString("```\n\n")
 
 	switch style {
 	case StyleFormal:
@@ -93,14 +85,14 @@ func Build(gitCmd string, style Style, ctx Context) string {
 		sb.WriteString("Use the imperative mood (e.g., 'Fix bug' not 'Fixed bug').\n\n")
 	}
 
-	// Append context instructions
+	// Append resolved context
 	switch ctx.Type {
 	case ContextFile:
-		sb.WriteString(fmt.Sprintf("Read the file at %s for additional context.\n\n", ctx.Value))
+		sb.WriteString(fmt.Sprintf("Additional context (from file %s):\n\n%s\n\n", ctx.Value, ctx.Content))
 	case ContextURL:
-		sb.WriteString(fmt.Sprintf("Fetch and review %s for additional context.\n\n", ctx.Value))
+		sb.WriteString(fmt.Sprintf("Additional context (from %s):\n\n%s\n\n", ctx.Value, ctx.Content))
 	case ContextString:
-		sb.WriteString(fmt.Sprintf("Additional context: %s\n\n", ctx.Value))
+		sb.WriteString(fmt.Sprintf("Additional context: %s\n\n", ctx.Content))
 	}
 
 	sb.WriteString("Output the commit message wrapped ONLY between these exact delimiters:\n")

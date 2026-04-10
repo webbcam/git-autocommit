@@ -15,9 +15,11 @@ type Config struct {
 
 // AgentConfig holds agent-specific configuration.
 type AgentConfig struct {
-	Type   string `toml:"type"`
-	Binary string `toml:"binary"`
-	Model  string `toml:"model"`
+	Type    string `toml:"type"`
+	Binary  string `toml:"binary"`
+	Model   string `toml:"model"`
+	APIKey  string `toml:"api_key"`
+	BaseURL string `toml:"base_url"`
 }
 
 // Load loads configuration from file and/or environment variables.
@@ -45,6 +47,12 @@ func Load() (*Config, error) {
 	}
 	if v := os.Getenv("GIT_AUTOCOMMIT_MODEL"); v != "" {
 		cfg.Agent.Model = v
+	}
+	if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" && cfg.Agent.APIKey == "" {
+		cfg.Agent.APIKey = v
+	}
+	if v := os.Getenv("OPENAI_API_KEY"); v != "" && cfg.Agent.APIKey == "" {
+		cfg.Agent.APIKey = v
 	}
 
 	// Validate required fields

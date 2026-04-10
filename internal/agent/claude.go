@@ -20,22 +20,9 @@ func NewClaudeAgent(binary, model string) *ClaudeAgent {
 }
 
 // Generate invokes the Claude CLI with the given prompt and returns the raw output.
-// needsWebFetch and needsFileRead control which additional tools are enabled.
-func (c *ClaudeAgent) Generate(prompt string, needsWebFetch bool, needsFileRead bool) (string, error) {
-	tools := "Bash"
-	if needsWebFetch || needsFileRead {
-		if needsWebFetch {
-			tools += ",WebFetch"
-		}
-		if needsFileRead {
-			tools += ",Read"
-		}
-	}
-
+func (c *ClaudeAgent) Generate(prompt string) (string, error) {
 	args := []string{
 		"-p", prompt,
-		"--tools", tools,
-		"--allowedTools", tools,
 		"--model", c.Model,
 	}
 

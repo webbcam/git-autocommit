@@ -4,7 +4,7 @@ A CLI tool that generates git commit messages using an AI agent, then performs t
 
 ## How It Works
 
-`git-autocommit` constructs a prompt describing the diff to examine and the desired commit message format, sends it to a configured AI agent (e.g. the Claude CLI), parses the generated message from the output, and performs the appropriate git operation.
+`git-autocommit` runs the relevant git command to obtain the diff, constructs a prompt with the diff inlined, sends it to a configured AI agent, parses the generated message from the output, and performs the appropriate git operation.
 
 ## Installation
 
@@ -31,7 +31,13 @@ Configuration is required — either a config file, environment variables, or bo
 
 ### Config file
 
-Create `~/.config/git-autocommit/config.toml`:
+Create `~/.config/git-autocommit/config.toml`.
+
+Three agent types are supported:
+
+#### `claude` — Claude CLI
+
+Requires the [Claude Code](https://claude.ai/code) CLI on `$PATH`.
 
 ```toml
 [agent]
@@ -42,9 +48,55 @@ model  = "sonnet"
 
 | Field | Description |
 |---|---|
-| `type` | Agent type. Currently only `claude` is supported. |
-| `binary` | Path or name of the agent binary (must be on `$PATH` or an absolute path). |
-| `model` | Model name or alias passed to the agent (e.g. `sonnet`, `opus`, `claude-sonnet-4-6`). |
+| `type` | `claude` |
+| `binary` | Path or name of the Claude CLI binary. |
+| `model` | Model name or alias (e.g. `sonnet`, `opus`, `claude-sonnet-4-6`). |
+
+#### `anthropic` — Anthropic API
+
+Calls the Anthropic Messages API directly. Requires an API key.
+
+```toml
+[agent]
+type  = "anthropic"
+model = "claude-opus-4-6"
+# api_key = "sk-ant-..."  # or set ANTHROPIC_API_KEY env var
+```
+
+| Field | Description |
+|---|---|
+| `type` | `anthropic` |
+| `model` | Full model ID (e.g. `claude-opus-4-6`, `claude-sonnet-4-6`). |
+| `api_key` | Anthropic API key. Falls back to the `ANTHROPIC_API_KEY` environment variable. |
+
+#### `openai` — OpenAI-compatible API
+
+Calls the OpenAI chat completions API (or any compatible provider). Requires an API key.
+
+```toml
+[agent]
+type  = "openai"
+model = "gpt-4o"
+# api_key  = "sk-..."  # or set OPENAI_API_KEY env var
+# base_url = "..."     # defaults to https://api.openai.com/v1/chat/completions
+```
+
+| Field | Description |
+|---|---|
+| `type` | `openai` |
+| `model` | Model ID (e.g. `gpt-4o`, `gpt-4-turbo`). |
+| `api_key` | API key. Falls back to the `OPENAI_API_KEY` environment variable. |
+| `base_url` | API endpoint. Defaults to `https://api.openai.com/v1/chat/completions`. Override to use any OpenAI-compatible provider (e.g. Ollama, Mistral). |
+
+**Ollama example:**
+
+```toml
+[agent]
+type     = "openai"
+model    = "llama3.2"
+base_url = "http://localhost:11434/v1/chat/completions"
+api_key  = "ollama"
+```
 
 ### Environment variables
 
@@ -53,8 +105,10 @@ Environment variables override config file values:
 | Variable | Description |
 |---|---|
 | `GIT_AUTOCOMMIT_AGENT_TYPE` | Agent type |
-| `GIT_AUTOCOMMIT_AGENT_BINARY` | Agent binary |
-| `GIT_AUTOCOMMIT_MODEL` | Model name/alias |
+| `GIT_AUTOCOMMIT_AGENT_BINARY` | Agent binary (`claude` type only) |
+| `GIT_AUTOCOMMIT_MODEL` | Model name/ID |
+| `ANTHROPIC_API_KEY` | API key for the `anthropic` agent type |
+| `OPENAI_API_KEY` | API key for the `openai` agent type |
 
 ## Usage
 
@@ -150,8 +204,8 @@ Provides supplementary information to the AI. The type is auto-detected:
 
 | Value | Detection | Behaviour |
 |---|---|---|
-| File path | File exists on disk | AI reads the file |
-| URL | Starts with `http://` or `https://` | AI fetches the URL |
+| File path | File exists on disk | File contents are included in the prompt |
+| URL | Starts with `http://` or `https://` | URL is fetched and the response body is included in the prompt |
 | Plain string | Everything else | Included directly in the prompt |
 
 ```sh
@@ -196,4 +250,4 @@ git push origin v0.x.x
 ## Prerequisites
 
 - `git` on `$PATH`
-- A supported AI agent CLI on `$PATH` (currently: `claude` from [Claude Code](https://claude.ai/code))
+- A configured AI agent (see [Configuration](#configuration))

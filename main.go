@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 
@@ -145,13 +147,13 @@ func run() error {
 		style = prompt.StyleInformal
 	}
 
-	// Determine context
+	// Determine context type
 	var ctx prompt.Context
 	if opts.context {
 		ctx = prompt.DetectContextType(opts.contextValue)
 	}
 
-	// Determine the git command to use for the AI
+	// Determine the git command to use for the diff
 	var gitCmd string
 	var commitFunc func(msg string) error
 
@@ -174,21 +176,43 @@ func run() error {
 		}
 	}
 
+	// Run the git command to get the diff
+	parts := strings.Fields(gitCmd) // e.g. ["git", "diff", "--cached"]
+	diff, err := git.RunCommand(parts[1:])
+	if err != nil {
+		return err
+	}
+
+	// Resolve context content before building the prompt
+	if err := resolveContext(&ctx); err != nil {
+		return err
+	}
+
 	// Build the prompt
-	p := prompt.Build(gitCmd, style, ctx)
+	p := prompt.Build(diff, style, ctx)
 
 	// Create the agent
 	var ag agent.Agent
 	switch strings.ToLower(cfg.Agent.Type) {
 	case "claude":
 		ag = agent.NewClaudeAgent(cfg.Agent.Binary, cfg.Agent.Model)
+	case "anthropic":
+		if cfg.Agent.APIKey == "" {
+			return fmt.Errorf("anthropic agent requires an API key (set ANTHROPIC_API_KEY or api_key in config)")
+		}
+		ag = agent.NewAnthropicAgent(cfg.Agent.APIKey, cfg.Agent.Model)
+	case "openai":
+		if cfg.Agent.APIKey == "" {
+			return fmt.Errorf("openai agent requires an API key (set OPENAI_API_KEY or api_key in config)")
+		}
+		ag = agent.NewOpenAIAgent(cfg.Agent.APIKey, cfg.Agent.Model, cfg.Agent.BaseURL)
 	default:
 		return fmt.Errorf("unsupported agent type: %s", cfg.Agent.Type)
 	}
 
 	// Generate the commit message
 	fmt.Fprintln(os.Stderr, "Generating commit message...")
-	raw, err := ag.Generate(p, ctx.NeedsWebFetch(), ctx.NeedsFileRead())
+	raw, err := ag.Generate(p)
 	if err != nil {
 		return err
 	}
@@ -364,6 +388,40 @@ func handleRewrite(opts *options) (string, func(string) error, error) {
 		return git.RebaseRewordCommit(sha, msg)
 	}
 	return gitCmd, commitFn, nil
+}
+
+// resolveContext populates ctx.Content by reading files or fetching URLs.
+// For string contexts, Content is already set by DetectContextType.
+func resolveContext(ctx *prompt.Context) error {
+	switch ctx.Type {
+	case prompt.ContextFile:
+		b, err := os.ReadFile(ctx.Value)
+		if err != nil {
+			return fmt.Errorf("failed to read context file %s: %w", ctx.Value, err)
+		}
+		ctx.Content = string(b)
+	case prompt.ContextURL:
+		body, err := fetchURL(ctx.Value)
+		if err != nil {
+			return err
+		}
+		ctx.Content = body
+	}
+	return nil
+}
+
+// fetchURL fetches the body of a URL and returns it as a string.
+func fetchURL(url string) (string, error) {
+	resp, err := http.Get(url) //nolint:noctx
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response from %s: %w", url, err)
+	}
+	return string(b), nil
 }
 
 func main() {

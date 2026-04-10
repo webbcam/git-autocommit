@@ -8,6 +8,19 @@ import (
 	"strings"
 )
 
+// RunCommand executes a git subcommand with the given arguments and returns stdout.
+func RunCommand(args []string) (string, error) {
+	cmd := exec.Command("git", args...)
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("git %s failed: %s", strings.Join(args, " "), string(exitErr.Stderr))
+		}
+		return "", fmt.Errorf("git %s failed: %w", strings.Join(args, " "), err)
+	}
+	return string(out), nil
+}
+
 // HasStagedChanges returns true if there are staged changes in the current repository.
 func HasStagedChanges() (bool, error) {
 	cmd := exec.Command("git", "diff", "--cached", "--quiet")
