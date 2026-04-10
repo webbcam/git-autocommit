@@ -208,6 +208,8 @@ func run() error {
 		ag = agent.NewOpenAIAgent(cfg.Agent.APIKey, cfg.Agent.Model, cfg.Agent.BaseURL)
 	case "opencode":
 		ag = agent.NewOpenCodeAgent(cfg.Agent.Binary, cfg.Agent.Model)
+	case "kiro":
+		ag = agent.NewKiroAgent(cfg.Agent.Binary)
 	default:
 		return fmt.Errorf("unsupported agent type: %s", cfg.Agent.Type)
 	}
