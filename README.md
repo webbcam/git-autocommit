@@ -33,7 +33,20 @@ Configuration is required — either a config file, environment variables, or bo
 
 Create `~/.config/git-autocommit/config.toml`.
 
-Three agent types are supported:
+### Agent summary
+
+| Agent | Requires | `binary` | `model` | `api_key` | `base_url` |
+|---|---|---|---|---|---|
+| `claude` | [Claude Code](https://claude.ai/code) CLI | optional (`claude`) | optional | — | — |
+| `anthropic` | Anthropic API key | — | required | required* | — |
+| `openai` | OpenAI API key | — | required | required* | optional |
+| `ollama` | [Ollama](https://ollama.com) running locally | — | required | — | optional |
+| `opencode` | [opencode](https://opencode.ai) CLI | optional (`opencode`) | required | — | — |
+| `kiro` | [kiro-cli](https://kiro.dev/docs/cli/) | optional (`kiro-cli`) | — | — | — |
+
+\* Can be set via environment variable instead (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
+
+### Agent configuration
 
 #### `claude` — Claude CLI
 
