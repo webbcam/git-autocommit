@@ -206,6 +206,8 @@ func run() error {
 			return fmt.Errorf("openai agent requires an API key (set OPENAI_API_KEY or api_key in config)")
 		}
 		ag = agent.NewOpenAIAgent(cfg.Agent.APIKey, cfg.Agent.Model, cfg.Agent.BaseURL)
+	case "opencode":
+		ag = agent.NewOpenCodeAgent(cfg.Agent.Binary, cfg.Agent.Model)
 	default:
 		return fmt.Errorf("unsupported agent type: %s", cfg.Agent.Type)
 	}
