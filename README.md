@@ -86,17 +86,37 @@ model = "gpt-4o"
 | `type` | `openai` |
 | `model` | Model ID (e.g. `gpt-4o`, `gpt-4-turbo`). |
 | `api_key` | API key. Falls back to the `OPENAI_API_KEY` environment variable. |
-| `base_url` | API endpoint. Defaults to `https://api.openai.com/v1/chat/completions`. Override to use any OpenAI-compatible provider (e.g. Ollama, Mistral). |
+| `base_url` | API endpoint. Defaults to `https://api.openai.com/v1/chat/completions`. Override to use any OpenAI-compatible provider (e.g. Mistral). |
 
-**Ollama example:**
+#### `ollama` — Ollama (local or network)
+
+Calls a locally running [Ollama](https://ollama.com) instance. No API key required.
 
 ```toml
 [agent]
-type     = "openai"
-model    = "llama3.2"
-base_url = "http://localhost:11434/v1/chat/completions"
-api_key  = "ollama"
+type  = "ollama"
+model = "qwen2.5-coder:3b"
+# base_url = "http://localhost:11434/v1/chat/completions"  # default
 ```
+
+| Field | Description |
+|---|---|
+| `type` | `ollama` |
+| `model` | Any model you have pulled locally (e.g. `qwen2.5-coder:3b`, `llama3.2`, `mistral`). |
+| `base_url` | Defaults to `http://localhost:11434/v1/chat/completions`. |
+
+**Prerequisites:** Install Ollama (`brew install ollama`), pull a model (`ollama pull qwen2.5-coder:3b`), and ensure the daemon is running (`ollama serve`).
+
+**Using Ollama on another machine on your local network:**
+
+```toml
+[agent]
+type     = "ollama"
+model    = "qwen2.5-coder:3b"
+base_url = "http://192.168.1.50:11434/v1/chat/completions"
+```
+
+The remote machine must run Ollama with `OLLAMA_HOST=0.0.0.0 ollama serve` to accept connections from the network.
 
 ### Environment variables
 
