@@ -166,7 +166,18 @@ func ListCommitsInRange(ref1, ref2 string) ([]string, error) {
 // RebaseRewordCommit runs interactive rebase to reword a single commit identified by sha.
 // newMessage is the new commit message.
 func RebaseRewordCommit(sha, newMessage string) error {
-	scriptContent := fmt.Sprintf("reword %s placeholder\n", sha)
+	// Commits after sha up to HEAD must be preserved with pick.
+	afterSHAs, err := ListCommitsInRange(sha, "HEAD")
+	if err != nil {
+		return err
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("reword %s placeholder\n", sha))
+	for _, afterSHA := range afterSHAs {
+		sb.WriteString(fmt.Sprintf("pick %s placeholder\n", afterSHA))
+	}
+	scriptContent := sb.String()
 
 	msgFile, err := writeTempFile(newMessage)
 	if err != nil {
@@ -180,8 +191,8 @@ func RebaseRewordCommit(sha, newMessage string) error {
 	}
 	defer func() { _ = os.Remove(todoFile) }()
 
-	sequenceEditor := fmt.Sprintf("/bin/sh -c 'cp %s \"$1\"'", shellEscape(todoFile))
-	commitEditor := fmt.Sprintf("/bin/sh -c 'cp %s \"$1\"'", shellEscape(msgFile))
+	sequenceEditor := fmt.Sprintf("cp %s", shellEscape(todoFile))
+	commitEditor := fmt.Sprintf("cp %s", shellEscape(msgFile))
 
 	baseRef := sha + "~1"
 	cmd := exec.Command("git", "rebase", "-i", baseRef)
@@ -240,8 +251,8 @@ func RebaseSquashRange(ref1, ref2, newMessage string) error {
 	}
 	defer func() { _ = os.Remove(todoFile) }()
 
-	sequenceEditor := fmt.Sprintf("/bin/sh -c 'cp %s \"$1\"'", shellEscape(todoFile))
-	commitEditor := fmt.Sprintf("/bin/sh -c 'cp %s \"$1\"'", shellEscape(msgFile))
+	sequenceEditor := fmt.Sprintf("cp %s", shellEscape(todoFile))
+	commitEditor := fmt.Sprintf("cp %s", shellEscape(msgFile))
 
 	cmd := exec.Command("git", "rebase", "-i", ref1)
 	cmd.Env = append(os.Environ(),

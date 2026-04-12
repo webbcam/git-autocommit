@@ -41,16 +41,25 @@ Examples:
 
 // options holds parsed CLI arguments.
 type options struct {
-	formal      bool
-	informal    bool
-	skip        bool
-	squash      bool
-	squashValue string
-	rewrite     bool
-	rewriteRef  string // empty means "rewrite HEAD"
-	context     bool
+	formal       bool
+	informal     bool
+	skip         bool
+	squash       bool
+	squashValue  string
+	rewrite      bool
+	rewriteRef   string // empty means "rewrite HEAD"
+	context      bool
 	contextValue string
-	help        bool
+	help         bool
+}
+
+// runDeps holds injectable dependencies for runWithDeps.
+// In production, run() provides real OS values. Tests inject stubs.
+type runDeps struct {
+	args    []string
+	stdin   io.Reader
+	cfg     *config.Config // if nil, config.Load() is called
+	agentFn func(*config.Config) (agent.Agent, error)
 }
 
 func printUsage() {
@@ -107,8 +116,18 @@ func parseArgs(args []string) (*options, error) {
 	return opts, nil
 }
 
+// run is the real entry point, wiring real OS dependencies.
 func run() error {
-	opts, err := parseArgs(os.Args[1:])
+	return runWithDeps(runDeps{
+		args:    os.Args[1:],
+		stdin:   os.Stdin,
+		agentFn: buildAgent,
+	})
+}
+
+// runWithDeps is the testable core of the program.
+func runWithDeps(deps runDeps) error {
+	opts, err := parseArgs(deps.args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
 		printUsage()
@@ -136,9 +155,12 @@ func run() error {
 	}
 
 	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		return err
+	cfg := deps.cfg
+	if cfg == nil {
+		cfg, err = config.Load()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Determine message style
@@ -192,28 +214,9 @@ func run() error {
 	p := prompt.Build(diff, style, ctx)
 
 	// Create the agent
-	var ag agent.Agent
-	switch strings.ToLower(cfg.Agent.Type) {
-	case "claude":
-		ag = agent.NewClaudeAgent(cfg.Agent.Binary, cfg.Agent.Model)
-	case "anthropic":
-		if cfg.Agent.APIKey == "" {
-			return fmt.Errorf("anthropic agent requires an API key (set ANTHROPIC_API_KEY or api_key in config)")
-		}
-		ag = agent.NewAnthropicAgent(cfg.Agent.APIKey, cfg.Agent.Model)
-	case "openai":
-		if cfg.Agent.APIKey == "" {
-			return fmt.Errorf("openai agent requires an API key (set OPENAI_API_KEY or api_key in config)")
-		}
-		ag = agent.NewOpenAIAgent(cfg.Agent.APIKey, cfg.Agent.Model, cfg.Agent.BaseURL)
-	case "ollama":
-		ag = agent.NewOllamaAgent(cfg.Agent.Model, cfg.Agent.BaseURL)
-	case "opencode":
-		ag = agent.NewOpenCodeAgent(cfg.Agent.Binary, cfg.Agent.Model)
-	case "kiro":
-		ag = agent.NewKiroAgent(cfg.Agent.Binary)
-	default:
-		return fmt.Errorf("unsupported agent type: %s", cfg.Agent.Type)
+	ag, err := deps.agentFn(cfg)
+	if err != nil {
+		return err
 	}
 
 	// Generate the commit message
@@ -236,7 +239,7 @@ func run() error {
 		fmt.Println("-------------------------------")
 		fmt.Print("Commit with this message? [y/N] ")
 
-		reader := bufio.NewReader(os.Stdin)
+		reader := bufio.NewReader(deps.stdin)
 		answer, _ := reader.ReadString('\n')
 		answer = strings.TrimSpace(answer)
 		if answer != "y" && answer != "Y" {
@@ -252,6 +255,32 @@ func run() error {
 
 	fmt.Fprintln(os.Stderr, "Committed successfully.")
 	return nil
+}
+
+// buildAgent constructs the Agent implementation from config.
+func buildAgent(cfg *config.Config) (agent.Agent, error) {
+	switch strings.ToLower(cfg.Agent.Type) {
+	case "claude":
+		return agent.NewClaudeAgent(cfg.Agent.Binary, cfg.Agent.Model), nil
+	case "anthropic":
+		if cfg.Agent.APIKey == "" {
+			return nil, fmt.Errorf("anthropic agent requires an API key (set ANTHROPIC_API_KEY or api_key in config)")
+		}
+		return agent.NewAnthropicAgent(cfg.Agent.APIKey, cfg.Agent.Model), nil
+	case "openai":
+		if cfg.Agent.APIKey == "" {
+			return nil, fmt.Errorf("openai agent requires an API key (set OPENAI_API_KEY or api_key in config)")
+		}
+		return agent.NewOpenAIAgent(cfg.Agent.APIKey, cfg.Agent.Model, cfg.Agent.BaseURL), nil
+	case "ollama":
+		return agent.NewOllamaAgent(cfg.Agent.Model, cfg.Agent.BaseURL), nil
+	case "opencode":
+		return agent.NewOpenCodeAgent(cfg.Agent.Binary, cfg.Agent.Model), nil
+	case "kiro":
+		return agent.NewKiroAgent(cfg.Agent.Binary), nil
+	default:
+		return nil, fmt.Errorf("unsupported agent type: %s", cfg.Agent.Type)
+	}
 }
 
 // handleStandard handles the default commit mode.
