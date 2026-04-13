@@ -267,84 +267,139 @@ func runWithDeps(deps runDeps) error {
 	return nil
 }
 
+// fieldDef describes a single config field that the wizard should prompt for.
+type fieldDef struct {
+	label      string                            // prompt text
+	required   bool                              // re-prompt until non-empty when true
+	defaultVal string                            // shown in brackets; used when input is empty
+	set        func(*config.AgentConfig, string) // writes the value into the config
+}
+
+// agentDef is a registry entry: wizard metadata + how to build the agent.
+type agentDef struct {
+	name   string
+	desc   string
+	fields []fieldDef
+	build  func(*config.Config) (agent.Agent, error)
+}
+
+// agentRegistry is the single source of truth for all supported agents.
+// Adding a new agent only requires a new entry here.
+var agentRegistry = []agentDef{
+	{
+		name: "claude",
+		desc: "Claude CLI",
+		fields: []fieldDef{
+			{label: "Binary path", defaultVal: "claude", set: func(a *config.AgentConfig, v string) { a.Binary = v }},
+			{label: "Model", defaultVal: "sonnet", set: func(a *config.AgentConfig, v string) { a.Model = v }},
+		},
+		build: func(cfg *config.Config) (agent.Agent, error) {
+			return agent.NewClaudeAgent(cfg.Agent.Binary, cfg.Agent.Model), nil
+		},
+	},
+	{
+		name: "anthropic",
+		desc: "Anthropic API",
+		fields: []fieldDef{
+			{label: "API key", required: true, set: func(a *config.AgentConfig, v string) { a.APIKey = v }},
+			{label: "Model", defaultVal: "claude-sonnet-4-6", set: func(a *config.AgentConfig, v string) { a.Model = v }},
+		},
+		build: func(cfg *config.Config) (agent.Agent, error) {
+			if cfg.Agent.APIKey == "" {
+				return nil, fmt.Errorf("anthropic agent requires an API key (set ANTHROPIC_API_KEY or api_key in config)")
+			}
+			return agent.NewAnthropicAgent(cfg.Agent.APIKey, cfg.Agent.Model), nil
+		},
+	},
+	{
+		name: "openai",
+		desc: "OpenAI API (or compatible)",
+		fields: []fieldDef{
+			{label: "API key", required: true, set: func(a *config.AgentConfig, v string) { a.APIKey = v }},
+			{label: "Model", defaultVal: "gpt-4o", set: func(a *config.AgentConfig, v string) { a.Model = v }},
+			{label: "Base URL (optional, press Enter for OpenAI default)", set: func(a *config.AgentConfig, v string) { a.BaseURL = v }},
+		},
+		build: func(cfg *config.Config) (agent.Agent, error) {
+			if cfg.Agent.APIKey == "" {
+				return nil, fmt.Errorf("openai agent requires an API key (set OPENAI_API_KEY or api_key in config)")
+			}
+			return agent.NewOpenAIAgent(cfg.Agent.APIKey, cfg.Agent.Model, cfg.Agent.BaseURL), nil
+		},
+	},
+	{
+		name: "ollama",
+		desc: "Ollama (local)",
+		fields: []fieldDef{
+			{label: "Model", required: true, set: func(a *config.AgentConfig, v string) { a.Model = v }},
+			{label: "Base URL", defaultVal: "http://localhost:11434/v1/chat/completions", set: func(a *config.AgentConfig, v string) { a.BaseURL = v }},
+		},
+		build: func(cfg *config.Config) (agent.Agent, error) {
+			return agent.NewOllamaAgent(cfg.Agent.Model, cfg.Agent.BaseURL), nil
+		},
+	},
+	{
+		name: "opencode",
+		desc: "OpenCode CLI",
+		fields: []fieldDef{
+			{label: "Binary path", defaultVal: "opencode", set: func(a *config.AgentConfig, v string) { a.Binary = v }},
+			{label: "Model (optional, press Enter to skip)", set: func(a *config.AgentConfig, v string) { a.Model = v }},
+		},
+		build: func(cfg *config.Config) (agent.Agent, error) {
+			return agent.NewOpenCodeAgent(cfg.Agent.Binary, cfg.Agent.Model), nil
+		},
+	},
+	{
+		name: "kiro",
+		desc: "Kiro CLI",
+		fields: []fieldDef{
+			{label: "Binary path", defaultVal: "kiro", set: func(a *config.AgentConfig, v string) { a.Binary = v }},
+		},
+		build: func(cfg *config.Config) (agent.Agent, error) {
+			return agent.NewKiroAgent(cfg.Agent.Binary), nil
+		},
+	},
+}
+
 // runConfig runs the interactive configuration wizard.
 func runConfig(stdin io.Reader, stdout io.Writer) error {
 	reader := bufio.NewReader(stdin)
 
-	ask := func(label, defaultVal string) string {
-		if defaultVal != "" {
-			fmt.Fprintf(stdout, "%s [%s]: ", label, defaultVal)
-		} else {
-			fmt.Fprintf(stdout, "%s: ", label)
-		}
-		line, _ := reader.ReadString('\n')
-		val := strings.TrimSpace(line)
-		if val == "" {
-			return defaultVal
-		}
-		return val
-	}
-
-	askRequired := func(label string) string {
-		for {
-			fmt.Fprintf(stdout, "%s: ", label)
-			line, _ := reader.ReadString('\n')
-			val := strings.TrimSpace(line)
-			if val != "" {
-				return val
-			}
-			fmt.Fprintln(stdout, "  This field is required.")
-		}
-	}
-
-	type agentOption struct {
-		name string
-		desc string
-	}
-	agents := []agentOption{
-		{"claude", "Claude CLI"},
-		{"anthropic", "Anthropic API"},
-		{"openai", "OpenAI API (or compatible)"},
-		{"ollama", "Ollama (local)"},
-		{"opencode", "OpenCode CLI"},
-		{"kiro", "Kiro CLI"},
-	}
-
 	fmt.Fprintln(stdout, "Select agent type:")
-	for i, a := range agents {
-		fmt.Fprintf(stdout, "  %d. %-12s %s\n", i+1, a.name, a.desc)
+	for i, def := range agentRegistry {
+		fmt.Fprintf(stdout, "  %d. %-12s %s\n", i+1, def.name, def.desc)
 	}
-	fmt.Fprintf(stdout, "Enter choice [1-%d]: ", len(agents))
+	fmt.Fprintf(stdout, "Enter choice [1-%d]: ", len(agentRegistry))
 	line, _ := reader.ReadString('\n')
 	choice, err := strconv.Atoi(strings.TrimSpace(line))
-	if err != nil || choice < 1 || choice > len(agents) {
+	if err != nil || choice < 1 || choice > len(agentRegistry) {
 		return fmt.Errorf("invalid choice")
 	}
 
-	agentType := agents[choice-1].name
+	def := agentRegistry[choice-1]
 	cfg := &config.Config{}
-	cfg.Agent.Type = agentType
+	cfg.Agent.Type = def.name
 
 	fmt.Fprintln(stdout)
-	switch agentType {
-	case "claude":
-		cfg.Agent.Binary = ask("Binary path", "claude")
-		cfg.Agent.Model = ask("Model", "sonnet")
-	case "anthropic":
-		cfg.Agent.APIKey = askRequired("API key")
-		cfg.Agent.Model = ask("Model", "claude-sonnet-4-6")
-	case "openai":
-		cfg.Agent.APIKey = askRequired("API key")
-		cfg.Agent.Model = ask("Model", "gpt-4o")
-		cfg.Agent.BaseURL = ask("Base URL (optional, press Enter for OpenAI default)", "")
-	case "ollama":
-		cfg.Agent.Model = askRequired("Model")
-		cfg.Agent.BaseURL = ask("Base URL", "http://localhost:11434/v1/chat/completions")
-	case "opencode":
-		cfg.Agent.Binary = ask("Binary path", "opencode")
-		cfg.Agent.Model = ask("Model (optional, press Enter to skip)", "")
-	case "kiro":
-		cfg.Agent.Binary = ask("Binary path", "kiro")
+	for _, field := range def.fields {
+		var val string
+		for {
+			if field.defaultVal != "" {
+				fmt.Fprintf(stdout, "%s [%s]: ", field.label, field.defaultVal)
+			} else {
+				fmt.Fprintf(stdout, "%s: ", field.label)
+			}
+			line, _ := reader.ReadString('\n')
+			val = strings.TrimSpace(line)
+			if val == "" {
+				if field.required {
+					fmt.Fprintln(stdout, "  This field is required.")
+					continue
+				}
+				val = field.defaultVal
+			}
+			break
+		}
+		field.set(&cfg.Agent, val)
 	}
 
 	if err := config.Save(cfg); err != nil {
@@ -356,30 +411,14 @@ func runConfig(stdin io.Reader, stdout io.Writer) error {
 	return nil
 }
 
-// buildAgent constructs the Agent implementation from config.
+// buildAgent constructs the Agent from config using the registry.
 func buildAgent(cfg *config.Config) (agent.Agent, error) {
-	switch strings.ToLower(cfg.Agent.Type) {
-	case "claude":
-		return agent.NewClaudeAgent(cfg.Agent.Binary, cfg.Agent.Model), nil
-	case "anthropic":
-		if cfg.Agent.APIKey == "" {
-			return nil, fmt.Errorf("anthropic agent requires an API key (set ANTHROPIC_API_KEY or api_key in config)")
+	for _, def := range agentRegistry {
+		if strings.EqualFold(def.name, cfg.Agent.Type) {
+			return def.build(cfg)
 		}
-		return agent.NewAnthropicAgent(cfg.Agent.APIKey, cfg.Agent.Model), nil
-	case "openai":
-		if cfg.Agent.APIKey == "" {
-			return nil, fmt.Errorf("openai agent requires an API key (set OPENAI_API_KEY or api_key in config)")
-		}
-		return agent.NewOpenAIAgent(cfg.Agent.APIKey, cfg.Agent.Model, cfg.Agent.BaseURL), nil
-	case "ollama":
-		return agent.NewOllamaAgent(cfg.Agent.Model, cfg.Agent.BaseURL), nil
-	case "opencode":
-		return agent.NewOpenCodeAgent(cfg.Agent.Binary, cfg.Agent.Model), nil
-	case "kiro":
-		return agent.NewKiroAgent(cfg.Agent.Binary), nil
-	default:
-		return nil, fmt.Errorf("unsupported agent type: %s", cfg.Agent.Type)
 	}
+	return nil, fmt.Errorf("unsupported agent type: %s", cfg.Agent.Type)
 }
 
 // handleStandard handles the default commit mode.
