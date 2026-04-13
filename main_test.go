@@ -325,6 +325,48 @@ func TestRun_SquashN(t *testing.T) {
 	}
 }
 
+func TestRun_SquashN_All(t *testing.T) {
+	dir := initTestRepo(t)
+	makeCommit(t, dir, "first")
+	makeCommit(t, dir, "second")
+	makeCommit(t, dir, "third")
+
+	stub := &stubAgent{msg: "Squash all three"}
+	if err := runWithDeps(runDeps{
+		args:    []string{"--squash", "3", "--skip"},
+		stdin:   strings.NewReader(""),
+		cfg:     testCfg(),
+		agentFn: testAgentFn(stub),
+	}); err != nil {
+		t.Fatalf("runWithDeps: %v", err)
+	}
+
+	if commitCount(t, dir) != 1 {
+		t.Errorf("expected 1 commit after squash-all, got %d", commitCount(t, dir))
+	}
+	if headSubject(t, dir) != "Squash all three" {
+		t.Errorf("head subject = %q", headSubject(t, dir))
+	}
+}
+
+func TestRun_SquashN_NotEnoughCommits(t *testing.T) {
+	dir := initTestRepo(t)
+	makeCommit(t, dir, "only commit")
+
+	err := runWithDeps(runDeps{
+		args:    []string{"--squash", "3", "--skip"},
+		stdin:   strings.NewReader(""),
+		cfg:     testCfg(),
+		agentFn: testAgentFn(&stubAgent{msg: "unused"}),
+	})
+	if err == nil {
+		t.Fatal("expected error for squash N with only 1 commit, got nil")
+	}
+	if !strings.Contains(err.Error(), "not enough commits") {
+		t.Errorf("error = %q, want it to mention 'not enough commits'", err.Error())
+	}
+}
+
 func TestRun_Rewrite(t *testing.T) {
 	dir := initTestRepo(t)
 	makeCommit(t, dir, "base")

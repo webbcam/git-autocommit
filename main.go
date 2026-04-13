@@ -457,6 +457,30 @@ func handleSquash(opts *options) (string, func(string) error, error) {
 		}
 		// Capture the diff BEFORE reset
 		headRef := fmt.Sprintf("HEAD~%d", intVal)
+		if err := git.ValidateRef(headRef); err != nil {
+			// HEAD~N doesn't exist — squash all commits if there are at least 2
+			hasParent, parentErr := git.HasParent()
+			if parentErr != nil {
+				return "", nil, parentErr
+			}
+			if !hasParent {
+				return "", nil, fmt.Errorf("not enough commits to squash %d: repository has only 1 commit", intVal)
+			}
+			// Squash all: diff from empty tree, reset to root then amend
+			const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+			gitCmd := fmt.Sprintf("git diff %s HEAD", emptyTree)
+			commitFn := func(msg string) error {
+				root, err := git.RootCommit()
+				if err != nil {
+					return err
+				}
+				if err := git.SoftReset(root); err != nil {
+					return err
+				}
+				return git.AmendCommit(msg)
+			}
+			return gitCmd, commitFn, nil
+		}
 		gitCmd := fmt.Sprintf("git diff %s HEAD", headRef)
 
 		commitFn := func(msg string) error {

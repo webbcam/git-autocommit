@@ -266,6 +266,16 @@ func RebaseSquashRange(ref1, ref2, newMessage string) error {
 	return nil
 }
 
+// RootCommit returns the SHA of the first commit in the repository.
+func RootCommit() (string, error) {
+	cmd := exec.Command("git", "rev-list", "--max-parents=0", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to find root commit: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // ParseSquashValue parses the value given to --squash.
 // Returns (isInt, intVal, ref1, ref2, isSingleRef, err).
 // If isSingleRef, ref1 is the single ref and ref2 is empty.
