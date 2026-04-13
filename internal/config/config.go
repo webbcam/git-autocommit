@@ -29,7 +29,7 @@ func Load() (*Config, error) {
 	cfg := &Config{}
 
 	// Try to load from file first
-	configPath, err := defaultConfigPath()
+	configPath, err := DefaultConfigPath()
 	if err == nil {
 		if _, statErr := os.Stat(configPath); statErr == nil {
 			if _, parseErr := toml.DecodeFile(configPath, cfg); parseErr != nil {
@@ -58,7 +58,8 @@ func Load() (*Config, error) {
 	// Validate required fields
 	if cfg.Agent.Type == "" && cfg.Agent.Binary == "" && cfg.Agent.Model == "" {
 		return nil, fmt.Errorf(
-			"no configuration found. Create %s or set environment variables:\n"+
+			"no configuration found. Run 'git-autocommit config' or create %s manually.\n"+
+				"Environment variable overrides:\n"+
 				"  GIT_AUTOCOMMIT_AGENT_TYPE\n"+
 				"  GIT_AUTOCOMMIT_AGENT_BINARY\n"+
 				"  GIT_AUTOCOMMIT_MODEL",
@@ -80,7 +81,24 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-func defaultConfigPath() (string, error) {
+// Save writes cfg to the default config file path, creating directories as needed.
+func Save(cfg *Config) error {
+	configPath, err := DefaultConfigPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	f, err := os.Create(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to create config file: %w", err)
+	}
+	defer f.Close()
+	return toml.NewEncoder(f).Encode(cfg)
+}
+
+func DefaultConfigPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("could not determine home directory: %w", err)

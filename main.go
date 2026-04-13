@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/webbcam/git-autocommit/internal/agent"
@@ -19,6 +20,10 @@ const usageText = `git-autocommit — Generate git commit messages using AI
 
 Usage:
   git-autocommit [options]
+  git-autocommit config
+
+Commands:
+  config            Interactive setup wizard to configure your AI agent
 
 Options:
   --formal          Use formal multi-section commit message template (default)
@@ -30,6 +35,7 @@ Options:
   -h, --help        Print this usage information
 
 Examples:
+  git-autocommit config               # Set up your AI agent
   git-autocommit                      # Commit staged changes with AI-generated message
   git-autocommit --informal           # Single-line commit message
   git-autocommit --squash 3           # Squash last 3 commits
@@ -118,8 +124,12 @@ func parseArgs(args []string) (*options, error) {
 
 // run is the real entry point, wiring real OS dependencies.
 func run() error {
+	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "config" {
+		return runConfig(os.Stdin, os.Stdout)
+	}
 	return runWithDeps(runDeps{
-		args:    os.Args[1:],
+		args:    args,
 		stdin:   os.Stdin,
 		agentFn: buildAgent,
 	})
@@ -254,6 +264,95 @@ func runWithDeps(deps runDeps) error {
 	}
 
 	fmt.Fprintln(os.Stderr, "Committed successfully.")
+	return nil
+}
+
+// runConfig runs the interactive configuration wizard.
+func runConfig(stdin io.Reader, stdout io.Writer) error {
+	reader := bufio.NewReader(stdin)
+
+	ask := func(label, defaultVal string) string {
+		if defaultVal != "" {
+			fmt.Fprintf(stdout, "%s [%s]: ", label, defaultVal)
+		} else {
+			fmt.Fprintf(stdout, "%s: ", label)
+		}
+		line, _ := reader.ReadString('\n')
+		val := strings.TrimSpace(line)
+		if val == "" {
+			return defaultVal
+		}
+		return val
+	}
+
+	askRequired := func(label string) string {
+		for {
+			fmt.Fprintf(stdout, "%s: ", label)
+			line, _ := reader.ReadString('\n')
+			val := strings.TrimSpace(line)
+			if val != "" {
+				return val
+			}
+			fmt.Fprintln(stdout, "  This field is required.")
+		}
+	}
+
+	type agentOption struct {
+		name string
+		desc string
+	}
+	agents := []agentOption{
+		{"claude", "Claude CLI"},
+		{"anthropic", "Anthropic API"},
+		{"openai", "OpenAI API (or compatible)"},
+		{"ollama", "Ollama (local)"},
+		{"opencode", "OpenCode CLI"},
+		{"kiro", "Kiro CLI"},
+	}
+
+	fmt.Fprintln(stdout, "Select agent type:")
+	for i, a := range agents {
+		fmt.Fprintf(stdout, "  %d. %-12s %s\n", i+1, a.name, a.desc)
+	}
+	fmt.Fprintf(stdout, "Enter choice [1-%d]: ", len(agents))
+	line, _ := reader.ReadString('\n')
+	choice, err := strconv.Atoi(strings.TrimSpace(line))
+	if err != nil || choice < 1 || choice > len(agents) {
+		return fmt.Errorf("invalid choice")
+	}
+
+	agentType := agents[choice-1].name
+	cfg := &config.Config{}
+	cfg.Agent.Type = agentType
+
+	fmt.Fprintln(stdout)
+	switch agentType {
+	case "claude":
+		cfg.Agent.Binary = ask("Binary path", "claude")
+		cfg.Agent.Model = ask("Model", "sonnet")
+	case "anthropic":
+		cfg.Agent.APIKey = askRequired("API key")
+		cfg.Agent.Model = ask("Model", "claude-sonnet-4-6")
+	case "openai":
+		cfg.Agent.APIKey = askRequired("API key")
+		cfg.Agent.Model = ask("Model", "gpt-4o")
+		cfg.Agent.BaseURL = ask("Base URL (optional, press Enter for OpenAI default)", "")
+	case "ollama":
+		cfg.Agent.Model = askRequired("Model")
+		cfg.Agent.BaseURL = ask("Base URL", "http://localhost:11434/v1/chat/completions")
+	case "opencode":
+		cfg.Agent.Binary = ask("Binary path", "opencode")
+		cfg.Agent.Model = ask("Model (optional, press Enter to skip)", "")
+	case "kiro":
+		cfg.Agent.Binary = ask("Binary path", "kiro")
+	}
+
+	if err := config.Save(cfg); err != nil {
+		return err
+	}
+
+	configPath, _ := config.DefaultConfigPath()
+	fmt.Fprintf(stdout, "\nConfiguration saved to %s\n", configPath)
 	return nil
 }
 
