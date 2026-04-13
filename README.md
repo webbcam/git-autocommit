@@ -35,16 +35,19 @@ Create `~/.config/git-autocommit/config.toml`.
 
 ### Agent summary
 
-| Agent | Requires | `binary` | `model` | `api_key` | `base_url` |
-|---|---|---|---|---|---|
-| `claude` | [Claude Code](https://claude.ai/code) CLI | optional (`claude`) | optional | — | — |
-| `anthropic` | Anthropic API key | — | required | required* | — |
-| `openai` | OpenAI API key | — | required | required* | optional |
-| `ollama` | [Ollama](https://ollama.com) running locally | — | required | — | optional |
-| `opencode` | [opencode](https://opencode.ai) CLI | optional (`opencode`) | required | — | — |
-| `kiro` | [kiro-cli](https://kiro.dev/docs/cli/) | optional (`kiro-cli`) | — | — | — |
+| Agent | Requires | `binary` | `model` | `api_key` | `base_url` | `endpoint_type` |
+|---|---|---|---|---|---|---|
+| `claude` | [Claude Code](https://claude.ai/code) CLI | optional (`claude`) | optional | — | — | — |
+| `anthropic` | Anthropic API key | — | required | required* | — | — |
+| `openai` | OpenAI API key | — | required | required* | optional | — |
+| `ollama` | [Ollama](https://ollama.com) running locally | — | required | — | optional | — |
+| `opencode` | [opencode](https://opencode.ai) CLI | optional (`opencode`) | required | — | — | — |
+| `opencode-go` | [OpenCode Go](https://opencode.ai/docs/go/) API key | — | required | required† | — | optional (`openai`) |
+| `kiro` | [kiro-cli](https://kiro.dev/docs/cli/) | optional (`kiro-cli`) | — | — | — | — |
 
 \* Can be set via environment variable instead (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
+
+† Can be set via the `OPENCODE_GO_API_KEY` environment variable.
 
 ### Agent configuration
 
@@ -148,6 +151,37 @@ model  = "anthropic/claude-opus-4-6"
 | `model` | Provider and model in `provider/model` format (e.g. `anthropic/claude-opus-4-6`, `openai/gpt-4o`). |
 | `binary` | Path to the opencode binary. Defaults to `opencode` (must be on `$PATH`). |
 
+#### `opencode-go` — OpenCode Go API
+
+Calls the [OpenCode Go](https://opencode.ai/docs/go/) API directly. Requires an API key (subscribe at [opencode.ai](https://opencode.ai/auth)).
+
+```toml
+[agent]
+type          = "opencode-go"
+model         = "kimi-k2.5"
+# api_key     = "..."  # or set OPENCODE_GO_API_KEY env var
+# endpoint_type = "openai"  # default; use "anthropic" for minimax models
+```
+
+| Field | Description |
+|---|---|
+| `type` | `opencode-go` |
+| `model` | Model ID (e.g. `kimi-k2.5`, `glm-5.1`, `mimo-v2-pro`, `minimax-m2.7`). |
+| `api_key` | OpenCode Go API key. Falls back to the `OPENCODE_GO_API_KEY` environment variable. |
+| `endpoint_type` | `openai` (default) for most models; `anthropic` for MiniMax models (`minimax-m2.5`, `minimax-m2.7`). |
+
+Available models and their required endpoint type:
+
+| Model | `endpoint_type` |
+|---|---|
+| `kimi-k2.5` | `openai` |
+| `glm-5` | `openai` |
+| `glm-5.1` | `openai` |
+| `mimo-v2-pro` | `openai` |
+| `mimo-v2-omni` | `openai` |
+| `minimax-m2.5` | `anthropic` |
+| `minimax-m2.7` | `anthropic` |
+
 #### `kiro` — Kiro CLI
 
 Uses the [kiro-cli](https://kiro.dev/docs/cli/). Model selection is configured globally in kiro-cli rather than per-invocation.
@@ -176,6 +210,7 @@ Environment variables override config file values:
 | `GIT_AUTOCOMMIT_MODEL` | Model name/ID |
 | `ANTHROPIC_API_KEY` | API key for the `anthropic` agent type |
 | `OPENAI_API_KEY` | API key for the `openai` agent type |
+| `OPENCODE_GO_API_KEY` | API key for the `opencode-go` agent type |
 
 ## Usage
 

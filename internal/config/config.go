@@ -15,11 +15,12 @@ type Config struct {
 
 // AgentConfig holds agent-specific configuration.
 type AgentConfig struct {
-	Type    string `toml:"type"`
-	Binary  string `toml:"binary"`
-	Model   string `toml:"model"`
-	APIKey  string `toml:"api_key"`
-	BaseURL string `toml:"base_url"`
+	Type         string `toml:"type"`
+	Binary       string `toml:"binary"`
+	Model        string `toml:"model"`
+	APIKey       string `toml:"api_key"`
+	BaseURL      string `toml:"base_url"`
+	EndpointType string `toml:"endpoint_type"`
 }
 
 // Load loads configuration from file and/or environment variables.
@@ -52,6 +53,9 @@ func Load() (*Config, error) {
 		cfg.Agent.APIKey = v
 	}
 	if v := os.Getenv("OPENAI_API_KEY"); v != "" && cfg.Agent.APIKey == "" {
+		cfg.Agent.APIKey = v
+	}
+	if v := os.Getenv("OPENCODE_GO_API_KEY"); v != "" && cfg.Agent.APIKey == "" {
 		cfg.Agent.APIKey = v
 	}
 

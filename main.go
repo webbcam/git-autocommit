@@ -349,6 +349,21 @@ var agentRegistry = []agentDef{
 		},
 	},
 	{
+		name: "opencode-go",
+		desc: "OpenCode Go (direct API)",
+		fields: []fieldDef{
+			{label: "API key", required: true, set: func(a *config.AgentConfig, v string) { a.APIKey = v }},
+			{label: "Model (e.g. kimi-k2.5, glm-5.1, minimax-m2.7)", defaultVal: "kimi-k2.5", set: func(a *config.AgentConfig, v string) { a.Model = v }},
+			{label: "Endpoint type — openai (default) or anthropic (for minimax models)", defaultVal: "openai", set: func(a *config.AgentConfig, v string) { a.EndpointType = v }},
+		},
+		build: func(cfg *config.Config) (agent.Agent, error) {
+			if cfg.Agent.APIKey == "" {
+				return nil, fmt.Errorf("opencode-go agent requires an API key (set OPENCODE_GO_API_KEY or api_key in config)")
+			}
+			return agent.NewOpenCodeGoAgent(cfg.Agent.APIKey, cfg.Agent.Model, cfg.Agent.EndpointType), nil
+		},
+	},
+	{
 		name: "kiro",
 		desc: "Kiro CLI",
 		fields: []fieldDef{
