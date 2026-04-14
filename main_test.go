@@ -24,32 +24,52 @@ func TestParseArgs(t *testing.T) {
 		{
 			name: "default (no args)",
 			args: []string{},
-			want: options{formal: true},
+			want: options{},
 		},
 		{
-			name: "--informal",
-			args: []string{"--informal"},
-			want: options{informal: true},
+			name: "--short",
+			args: []string{"--short"},
+			want: options{short: true},
 		},
 		{
-			name: "--formal explicit",
-			args: []string{"--formal"},
-			want: options{formal: true},
+			name: "--template explicit",
+			args: []string{"--template", "conventional"},
+			want: options{templateName: "conventional"},
+		},
+		{
+			name: "--template with path",
+			args: []string{"--template", "./my.tmpl"},
+			want: options{templateName: "./my.tmpl"},
+		},
+		{
+			name:    "--template missing value",
+			args:    []string{"--template"},
+			wantErr: true,
 		},
 		{
 			name: "--skip",
 			args: []string{"--skip"},
-			want: options{formal: true, skip: true},
+			want: options{skip: true},
+		},
+		{
+			name: "-v",
+			args: []string{"-v"},
+			want: options{verbose: true},
+		},
+		{
+			name: "--verbose",
+			args: []string{"--verbose"},
+			want: options{verbose: true},
 		},
 		{
 			name: "--squash integer",
 			args: []string{"--squash", "3"},
-			want: options{formal: true, squash: true, squashValue: "3"},
+			want: options{squash: true, squashValue: "3"},
 		},
 		{
 			name: "--squash range",
 			args: []string{"--squash", "abc..HEAD"},
-			want: options{formal: true, squash: true, squashValue: "abc..HEAD"},
+			want: options{squash: true, squashValue: "abc..HEAD"},
 		},
 		{
 			name:    "--squash missing value",
@@ -59,22 +79,22 @@ func TestParseArgs(t *testing.T) {
 		{
 			name: "--rewrite no ref",
 			args: []string{"--rewrite"},
-			want: options{formal: true, rewrite: true},
+			want: options{rewrite: true},
 		},
 		{
 			name: "--rewrite with ref",
 			args: []string{"--rewrite", "abc123"},
-			want: options{formal: true, rewrite: true, rewriteRef: "abc123"},
+			want: options{rewrite: true, rewriteRef: "abc123"},
 		},
 		{
 			name: "--rewrite does not consume following flag as ref",
 			args: []string{"--rewrite", "--skip"},
-			want: options{formal: true, rewrite: true, skip: true},
+			want: options{rewrite: true, skip: true},
 		},
 		{
 			name: "--context with value",
 			args: []string{"--context", "some plain text"},
-			want: options{formal: true, context: true, contextValue: "some plain text"},
+			want: options{context: true, contextValue: "some plain text"},
 		},
 		{
 			name:    "--context missing value",
@@ -84,12 +104,12 @@ func TestParseArgs(t *testing.T) {
 		{
 			name: "-h",
 			args: []string{"-h"},
-			want: options{formal: true, help: true},
+			want: options{help: true},
 		},
 		{
 			name: "--help",
 			args: []string{"--help"},
-			want: options{formal: true, help: true},
+			want: options{help: true},
 		},
 		{
 			name:    "unknown flag",
@@ -97,14 +117,14 @@ func TestParseArgs(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "--informal --skip combined",
-			args: []string{"--informal", "--skip"},
-			want: options{informal: true, skip: true},
+			name: "--short --skip combined",
+			args: []string{"--short", "--skip"},
+			want: options{short: true, skip: true},
 		},
 		{
-			name: "--squash --informal --skip combined",
-			args: []string{"--squash", "2", "--informal", "--skip"},
-			want: options{informal: true, skip: true, squash: true, squashValue: "2"},
+			name: "--squash --short --skip combined",
+			args: []string{"--squash", "2", "--short", "--skip"},
+			want: options{short: true, skip: true, squash: true, squashValue: "2"},
 		},
 	}
 
@@ -124,10 +144,21 @@ func TestParseArgs(t *testing.T) {
 	}
 }
 
+func TestParseArgs_TemplateAndShortMutuallyExclusive(t *testing.T) {
+	// Mutual exclusion is validated in runWithDeps, not parseArgs.
+	// parseArgs itself should succeed for both flags.
+	got, err := parseArgs([]string{"--template", "full", "--short"})
+	if err != nil {
+		t.Fatalf("parseArgs should not error: %v", err)
+	}
+	if got.templateName != "full" || !got.short {
+		t.Error("expected both flags to be set")
+	}
+}
+
 // ---- Orchestration tests ----
 
 // stubAgent is a fake Agent implementation for orchestration tests.
-// It returns a canned response containing the commit message delimiters.
 type stubAgent struct {
 	msg            string
 	receivedPrompt string
@@ -144,7 +175,6 @@ func testAgentFn(stub agent.Agent) func(*config.Config) (agent.Agent, error) {
 }
 
 // testCfg returns a minimal config that satisfies validation.
-// The agent type does not matter since agentFn is injected.
 func testCfg() *config.Config {
 	return &config.Config{Agent: config.AgentConfig{Type: "claude"}}
 }
@@ -262,7 +292,6 @@ func TestRun_StandardCommit(t *testing.T) {
 func TestRun_NoStagedChanges_Error(t *testing.T) {
 	dir := initTestRepo(t)
 	makeCommit(t, dir, "initial")
-	// Nothing staged.
 
 	err := runWithDeps(runDeps{
 		args:    []string{"--skip"},
@@ -279,14 +308,14 @@ func TestRun_NoStagedChanges_Error(t *testing.T) {
 	_ = dir
 }
 
-func TestRun_InformalStyle_PromptMention(t *testing.T) {
+func TestRun_ShortStyle_PromptMention(t *testing.T) {
 	dir := initTestRepo(t)
 	makeCommit(t, dir, "initial")
 	stageFile(t, dir, "new.txt", "hello")
 
 	stub := &stubAgent{msg: "Add hello"}
 	if err := runWithDeps(runDeps{
-		args:    []string{"--informal", "--skip"},
+		args:    []string{"--short", "--skip"},
 		stdin:   strings.NewReader(""),
 		cfg:     testCfg(),
 		agentFn: testAgentFn(stub),
@@ -295,14 +324,33 @@ func TestRun_InformalStyle_PromptMention(t *testing.T) {
 	}
 
 	if !strings.Contains(stub.receivedPrompt, "72") {
-		t.Error("informal prompt should mention 72 character limit")
+		t.Error("short template prompt should mention 72 character limit")
+	}
+	_ = dir
+}
+
+func TestRun_TemplateAndShort_MutuallyExclusive(t *testing.T) {
+	dir := initTestRepo(t)
+	makeCommit(t, dir, "initial")
+
+	err := runWithDeps(runDeps{
+		args:    []string{"--template", "full", "--short"},
+		stdin:   strings.NewReader(""),
+		cfg:     testCfg(),
+		agentFn: testAgentFn(&stubAgent{msg: "msg"}),
+	})
+	if err == nil {
+		t.Error("expected error for --template and --short together")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("error = %q, want it to mention 'mutually exclusive'", err.Error())
 	}
 	_ = dir
 }
 
 func TestRun_SquashN(t *testing.T) {
 	dir := initTestRepo(t)
-	makeCommit(t, dir, "base")  // not squashed; provides HEAD~3 anchor
+	makeCommit(t, dir, "base")
 	makeCommit(t, dir, "first")
 	makeCommit(t, dir, "second")
 	makeCommit(t, dir, "third")
@@ -317,7 +365,7 @@ func TestRun_SquashN(t *testing.T) {
 		t.Fatalf("runWithDeps: %v", err)
 	}
 
-	if commitCount(t, dir) != 2 { // base + squashed
+	if commitCount(t, dir) != 2 {
 		t.Errorf("expected 2 commits after squash, got %d", commitCount(t, dir))
 	}
 	if headSubject(t, dir) != "Squash three into one" {
@@ -397,7 +445,7 @@ func TestRun_ConfirmationAccepted(t *testing.T) {
 
 	stub := &stubAgent{msg: "Add file"}
 	if err := runWithDeps(runDeps{
-		args:    []string{}, // no --skip
+		args:    []string{},
 		stdin:   strings.NewReader("y\n"),
 		cfg:     testCfg(),
 		agentFn: testAgentFn(stub),
@@ -417,13 +465,12 @@ func TestRun_ConfirmationRejected(t *testing.T) {
 	before := commitCount(t, dir)
 
 	_ = runWithDeps(runDeps{
-		args:    []string{}, // no --skip
+		args:    []string{},
 		stdin:   strings.NewReader("n\n"),
 		cfg:     testCfg(),
 		agentFn: testAgentFn(&stubAgent{msg: "Add file"}),
 	})
 
-	// No new commit should have been made.
 	if commitCount(t, dir) != before {
 		t.Errorf("expected %d commits (no new commit), got %d", before, commitCount(t, dir))
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/webbcam/git-autocommit/internal/git"
 	"github.com/webbcam/git-autocommit/internal/parser"
 	"github.com/webbcam/git-autocommit/internal/prompt"
+	tmpl "github.com/webbcam/git-autocommit/internal/template"
 )
 
 const usageText = `git-autocommit — Generate git commit messages using AI
@@ -21,34 +22,47 @@ const usageText = `git-autocommit — Generate git commit messages using AI
 Usage:
   git-autocommit [options]
   git-autocommit config
+  git-autocommit templates list
+  git-autocommit templates show <name>
 
 Commands:
-  config            Interactive setup wizard to configure your AI agent
+  config                      Interactive setup wizard to configure your AI agent
+  templates list              List all available templates
+  templates show <name>       Print a template's contents
 
 Options:
-  --formal          Use formal multi-section commit message template (default)
-  --informal        Use single-line commit message (max 72 chars)
-  --skip            Skip confirmation prompt and commit immediately
-  --squash VALUE    Squash commits. VALUE is an integer N (≥2), a single ref, or REF1..REF2
-  --rewrite [REF]   Rewrite an existing commit's message. Optional REF targets a specific commit
-  --context VALUE   Additional context for the AI (file path, URL, or plain string)
-  -h, --help        Print this usage information
+  --template <name-or-path>   Use the named template or path to a .tmpl file
+  --short                     Shorthand for --template short (single-line message)
+  --skip                      Skip confirmation prompt and commit immediately
+  --squash VALUE              Squash commits. VALUE is an integer N (≥2), a single ref, or REF1..REF2
+  --rewrite [REF]             Rewrite an existing commit's message. Optional REF targets a specific commit
+  --context VALUE             Additional context for the AI (file path, URL, or plain string)
+  -v, --verbose               Log the resolved template and its source before generating
+  -h, --help                  Print this usage information
+
+Environment variables:
+  GIT_AUTOCOMMIT_TEMPLATE     Template name or path (overridden by --template / --short)
 
 Examples:
-  git-autocommit config               # Set up your AI agent
-  git-autocommit                      # Commit staged changes with AI-generated message
-  git-autocommit --informal           # Single-line commit message
-  git-autocommit --squash 3           # Squash last 3 commits
-  git-autocommit --squash abc123..HEAD # Squash range via interactive rebase
-  git-autocommit --rewrite            # Amend last commit message
-  git-autocommit --rewrite abc123     # Rewrite a specific commit's message
-  git-autocommit --context ./ticket.md # Use file as additional context
+  git-autocommit config                    # Set up your AI agent
+  git-autocommit                           # Commit staged changes (uses full template)
+  git-autocommit --short                   # Single-line commit message
+  git-autocommit --template conventional  # Use a named template
+  git-autocommit --template ./my.tmpl     # Use a template file
+  git-autocommit --squash 3               # Squash last 3 commits
+  git-autocommit --squash abc123..HEAD    # Squash range via interactive rebase
+  git-autocommit --rewrite                # Amend last commit message
+  git-autocommit --rewrite abc123         # Rewrite a specific commit's message
+  git-autocommit --context ./ticket.md    # Use file as additional context
+  git-autocommit templates list           # Show available templates
+  git-autocommit templates show full      # Print the full template
 `
 
 // options holds parsed CLI arguments.
 type options struct {
-	formal       bool
-	informal     bool
+	templateName string // --template flag value (empty = not set)
+	short        bool   // --short flag
+	verbose      bool   // -v / --verbose
 	skip         bool
 	squash       bool
 	squashValue  string
@@ -73,9 +87,7 @@ func printUsage() {
 }
 
 func parseArgs(args []string) (*options, error) {
-	opts := &options{
-		formal: true, // default
-	}
+	opts := &options{}
 
 	i := 0
 	for i < len(args) {
@@ -84,12 +96,16 @@ func parseArgs(args []string) (*options, error) {
 		case "-h", "--help":
 			opts.help = true
 			return opts, nil
-		case "--formal":
-			opts.formal = true
-			opts.informal = false
-		case "--informal":
-			opts.informal = true
-			opts.formal = false
+		case "--template":
+			i++
+			if i >= len(args) {
+				return nil, fmt.Errorf("--template requires an argument.")
+			}
+			opts.templateName = args[i]
+		case "--short":
+			opts.short = true
+		case "-v", "--verbose":
+			opts.verbose = true
 		case "--skip":
 			opts.skip = true
 		case "--squash":
@@ -125,8 +141,13 @@ func parseArgs(args []string) (*options, error) {
 // run is the real entry point, wiring real OS dependencies.
 func run() error {
 	args := os.Args[1:]
-	if len(args) > 0 && args[0] == "config" {
-		return runConfig(os.Stdin, os.Stdout)
+	if len(args) > 0 {
+		switch args[0] {
+		case "config":
+			return runConfig(os.Stdin, os.Stdout)
+		case "templates":
+			return runTemplates(args[1:], os.Stdout)
+		}
 	}
 	return runWithDeps(runDeps{
 		args:    args,
@@ -149,7 +170,10 @@ func runWithDeps(deps runDeps) error {
 		return nil
 	}
 
-	// Validate mutually exclusive modes
+	// Validate mutually exclusive flags
+	if opts.templateName != "" && opts.short {
+		return fmt.Errorf("--short and --template are mutually exclusive")
+	}
 	if opts.squash && opts.rewrite {
 		return fmt.Errorf("--squash and --rewrite cannot be used together")
 	}
@@ -173,18 +197,6 @@ func runWithDeps(deps runDeps) error {
 		}
 	}
 
-	// Determine message style
-	style := prompt.StyleFormal
-	if opts.informal {
-		style = prompt.StyleInformal
-	}
-
-	// Determine context type
-	var ctx prompt.Context
-	if opts.context {
-		ctx = prompt.DetectContextType(opts.contextValue)
-	}
-
 	// Determine the git command to use for the diff
 	var gitCmd string
 	var commitFunc func(msg string) error
@@ -201,18 +213,56 @@ func runWithDeps(deps runDeps) error {
 			return err
 		}
 	default:
-		// Standard commit
 		gitCmd, commitFunc, err = handleStandard()
 		if err != nil {
 			return err
 		}
 	}
 
+	// Resolve which template to use
+	repoRoot, _ := git.RunCommand([]string{"rev-parse", "--show-toplevel"})
+	repoRoot = strings.TrimSpace(repoRoot)
+	cwd, _ := os.Getwd()
+	remoteURL, _ := git.RunCommand([]string{"remote", "get-url", "origin"})
+	remoteURL = strings.TrimSpace(remoteURL)
+
+	ref, err := config.ResolveTemplate(config.ResolveInput{
+		FlagTemplate: opts.templateName,
+		FlagShort:    opts.short,
+		GlobalCfg:    cfg,
+		RepoRoot:     repoRoot,
+		Cwd:          cwd,
+		RemoteURL:    remoteURL,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Load and render the template
+	t, err := tmpl.Load(ref.Ref)
+	if err != nil {
+		return fmt.Errorf("loading template: %w", err)
+	}
+	templateBody, err := t.Render()
+	if err != nil {
+		return fmt.Errorf("rendering template: %w", err)
+	}
+
+	if opts.verbose {
+		fmt.Fprintf(os.Stderr, "template: %s (source: %s)\n", ref.Ref, ref.Source)
+	}
+
 	// Run the git command to get the diff
-	parts := strings.Fields(gitCmd) // e.g. ["git", "diff", "--cached"]
+	parts := strings.Fields(gitCmd)
 	diff, err := git.RunCommand(parts[1:])
 	if err != nil {
 		return err
+	}
+
+	// Determine context type
+	var ctx prompt.Context
+	if opts.context {
+		ctx = prompt.DetectContextType(opts.contextValue)
 	}
 
 	// Resolve context content before building the prompt
@@ -221,7 +271,7 @@ func runWithDeps(deps runDeps) error {
 	}
 
 	// Build the prompt
-	p := prompt.Build(diff, style, ctx)
+	p := prompt.Build(diff, templateBody, ctx)
 
 	// Create the agent
 	ag, err := deps.agentFn(cfg)
@@ -267,6 +317,94 @@ func runWithDeps(deps runDeps) error {
 	return nil
 }
 
+const templatesUsageText = `Usage:
+  git-autocommit templates list
+  git-autocommit templates show <name>
+
+Commands:
+  list           List all available templates (built-in and user-defined)
+  show <name>    Print the contents of a named template
+`
+
+// runTemplates handles the "templates" subcommand.
+func runTemplates(args []string, out io.Writer) error {
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
+		fmt.Fprint(out, templatesUsageText)
+		return nil
+	}
+	switch args[0] {
+	case "list":
+		return runTemplatesList(out)
+	case "show":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: git-autocommit templates show <name>")
+		}
+		return runTemplatesShow(args[1], out)
+	default:
+		return fmt.Errorf("unknown templates subcommand: %s", args[0])
+	}
+}
+
+// runTemplatesList prints all available templates grouped by source.
+func runTemplatesList(out io.Writer) error {
+	builtins, err := tmpl.AllEmbedded()
+	if err != nil {
+		return err
+	}
+	userTmpls, err := tmpl.UserTemplates()
+	if err != nil {
+		return err
+	}
+
+	// Build a set of user template names for override detection.
+	userNames := make(map[string]bool, len(userTmpls))
+	for _, t := range userTmpls {
+		userNames[t.Name] = true
+	}
+
+	fmt.Fprintln(out, "Built-in:")
+	for _, t := range builtins {
+		fmt.Fprintf(out, "  %-14s %s\n", t.Name, t.Description)
+	}
+
+	if len(userTmpls) > 0 {
+		userDir, _ := tmpl.UserTemplateDir()
+		fmt.Fprintf(out, "\nUser (%s):\n", userDir)
+		for _, t := range userTmpls {
+			desc := t.Description
+			if _, isBuiltin := embeddedNameSet(builtins)[t.Name]; isBuiltin {
+				if desc != "" {
+					desc = "(overrides built-in)  " + desc
+				} else {
+					desc = "(overrides built-in)"
+				}
+			}
+			fmt.Fprintf(out, "  %-14s %s\n", t.Name, desc)
+		}
+	}
+
+	return nil
+}
+
+// embeddedNameSet returns a set of names from a slice of templates.
+func embeddedNameSet(ts []*tmpl.Template) map[string]struct{} {
+	m := make(map[string]struct{}, len(ts))
+	for _, t := range ts {
+		m[t.Name] = struct{}{}
+	}
+	return m
+}
+
+// runTemplatesShow prints the raw contents of a named template.
+func runTemplatesShow(name string, out io.Writer) error {
+	raw, err := tmpl.LoadRaw(name)
+	if err != nil {
+		return err
+	}
+	fmt.Fprint(out, raw)
+	return nil
+}
+
 // fieldDef describes a single config field that the wizard should prompt for.
 type fieldDef struct {
 	label      string                            // prompt text
@@ -284,7 +422,6 @@ type agentDef struct {
 }
 
 // agentRegistry is the single source of truth for all supported agents.
-// Adding a new agent only requires a new entry here.
 var agentRegistry = []agentDef{
 	{
 		name: "claude",
@@ -464,16 +601,13 @@ func handleSquash(opts *options) (string, func(string) error, error) {
 
 	switch {
 	case isInt:
-		// Integer N
 		if intVal < 2 {
 			return "", nil, fmt.Errorf(
 				"--squash N requires N ≥ 2. To rewrite a single commit's message, use --rewrite instead.",
 			)
 		}
-		// Capture the diff BEFORE reset
 		headRef := fmt.Sprintf("HEAD~%d", intVal)
 		if err := git.ValidateRef(headRef); err != nil {
-			// HEAD~N doesn't exist — squash all commits if there are at least 2
 			hasParent, parentErr := git.HasParent()
 			if parentErr != nil {
 				return "", nil, parentErr
@@ -481,7 +615,6 @@ func handleSquash(opts *options) (string, func(string) error, error) {
 			if !hasParent {
 				return "", nil, fmt.Errorf("not enough commits to squash %d: repository has only 1 commit", intVal)
 			}
-			// Squash all: diff from empty tree, reset to root then amend
 			const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 			gitCmd := fmt.Sprintf("git diff %s HEAD", emptyTree)
 			commitFn := func(msg string) error {
@@ -497,7 +630,6 @@ func handleSquash(opts *options) (string, func(string) error, error) {
 			return gitCmd, commitFn, nil
 		}
 		gitCmd := fmt.Sprintf("git diff %s HEAD", headRef)
-
 		commitFn := func(msg string) error {
 			if err := git.SoftReset(headRef); err != nil {
 				return err
@@ -507,7 +639,6 @@ func handleSquash(opts *options) (string, func(string) error, error) {
 		return gitCmd, commitFn, nil
 
 	case isSingleRef:
-		// Single ref
 		if err := git.ValidateRef(ref1); err != nil {
 			return "", nil, err
 		}
@@ -521,14 +652,12 @@ func handleSquash(opts *options) (string, func(string) error, error) {
 		return gitCmd, commitFn, nil
 
 	default:
-		// Range REF1..REF2
 		if err := git.ValidateRef(ref1); err != nil {
 			return "", nil, err
 		}
 		if err := git.ValidateRef(ref2); err != nil {
 			return "", nil, err
 		}
-		// Verify ancestry
 		isAnc, err := git.IsAncestor(ref1, ref2)
 		if err != nil {
 			return "", nil, err
@@ -536,7 +665,6 @@ func handleSquash(opts *options) (string, func(string) error, error) {
 		if !isAnc {
 			return "", nil, fmt.Errorf("'%s' is not an ancestor of '%s'", ref1, ref2)
 		}
-
 		gitCmd := fmt.Sprintf("git diff %s %s", ref1, ref2)
 		commitFn := func(msg string) error {
 			return git.RebaseSquashRange(ref1, ref2, msg)
@@ -548,7 +676,6 @@ func handleSquash(opts *options) (string, func(string) error, error) {
 // handleRewrite handles the --rewrite mode.
 func handleRewrite(opts *options) (string, func(string) error, error) {
 	if opts.rewriteRef == "" {
-		// Rewrite HEAD: amend
 		hasParent, err := git.HasParent()
 		if err != nil {
 			return "", nil, err
@@ -558,7 +685,6 @@ func handleRewrite(opts *options) (string, func(string) error, error) {
 		if hasParent {
 			gitCmd = "git diff HEAD~1 HEAD"
 		} else {
-			// Root commit
 			gitCmd = "git show HEAD --format= -p"
 		}
 
@@ -568,7 +694,6 @@ func handleRewrite(opts *options) (string, func(string) error, error) {
 		return gitCmd, commitFn, nil
 	}
 
-	// Rewrite a specific ref via interactive rebase
 	ref := opts.rewriteRef
 	if err := git.ValidateRef(ref); err != nil {
 		return "", nil, err
@@ -582,7 +707,6 @@ func handleRewrite(opts *options) (string, func(string) error, error) {
 	gitCmd := fmt.Sprintf("git show %s --format= -p", sha)
 
 	commitFn := func(msg string) error {
-		// Stash uncommitted changes before rebase
 		hasChanges, err := git.HasUncommittedChanges()
 		if err != nil {
 			return err
@@ -603,7 +727,6 @@ func handleRewrite(opts *options) (string, func(string) error, error) {
 }
 
 // resolveContext populates ctx.Content by reading files or fetching URLs.
-// For string contexts, Content is already set by DetectContextType.
 func resolveContext(ctx *prompt.Context) error {
 	switch ctx.Type {
 	case prompt.ContextFile:

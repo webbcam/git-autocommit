@@ -66,7 +66,7 @@ func TestDetectContextType(t *testing.T) {
 }
 
 func TestBuild_AlwaysContainsDelimiters(t *testing.T) {
-	p := Build("some diff", StyleFormal, Context{})
+	p := Build("some diff", "template body", Context{})
 	if !strings.Contains(p, "===COMMIT_MSG_START===") {
 		t.Error("prompt missing start delimiter")
 	}
@@ -77,33 +77,22 @@ func TestBuild_AlwaysContainsDelimiters(t *testing.T) {
 
 func TestBuild_ContainsDiff(t *testing.T) {
 	diff := "--- a/foo.go\n+++ b/foo.go\n@@ -1 +1 @@\n+hello"
-	p := Build(diff, StyleFormal, Context{})
+	p := Build(diff, "body", Context{})
 	if !strings.Contains(p, diff) {
 		t.Error("prompt should contain the diff verbatim")
 	}
 }
 
-func TestBuild_FormalStyle(t *testing.T) {
-	p := Build("", StyleFormal, Context{})
-	for _, keyword := range []string{"[Problem]", "[Test]", "80"} {
-		if !strings.Contains(p, keyword) {
-			t.Errorf("formal prompt missing %q", keyword)
-		}
-	}
-}
-
-func TestBuild_InformalStyle(t *testing.T) {
-	p := Build("", StyleInformal, Context{})
-	if !strings.Contains(p, "72") {
-		t.Error("informal prompt should mention 72 character limit")
-	}
-	if strings.Contains(p, "[Problem]") {
-		t.Error("informal prompt should not contain [Problem] section")
+func TestBuild_ContainsTemplateBody(t *testing.T) {
+	body := "<subject line, 80 chars max>\n\n[Problem]\n<why>"
+	p := Build("", body, Context{})
+	if !strings.Contains(p, body) {
+		t.Error("prompt should contain the template body verbatim")
 	}
 }
 
 func TestBuild_NoContext(t *testing.T) {
-	p := Build("", StyleFormal, Context{Type: ContextNone})
+	p := Build("", "body", Context{Type: ContextNone})
 	if strings.Contains(p, "Additional context") {
 		t.Error("prompt with no context should not mention 'Additional context'")
 	}
@@ -111,7 +100,7 @@ func TestBuild_NoContext(t *testing.T) {
 
 func TestBuild_StringContext(t *testing.T) {
 	ctx := Context{Type: ContextString, Value: "the auth refactor", Content: "the auth refactor"}
-	p := Build("", StyleFormal, ctx)
+	p := Build("", "body", ctx)
 	if !strings.Contains(p, "the auth refactor") {
 		t.Error("prompt should contain string context")
 	}
@@ -119,7 +108,7 @@ func TestBuild_StringContext(t *testing.T) {
 
 func TestBuild_FileContext(t *testing.T) {
 	ctx := Context{Type: ContextFile, Value: "/path/to/ticket.md", Content: "ticket body text"}
-	p := Build("", StyleFormal, ctx)
+	p := Build("", "body", ctx)
 	if !strings.Contains(p, "ticket.md") {
 		t.Error("prompt should reference the file name")
 	}
@@ -130,7 +119,7 @@ func TestBuild_FileContext(t *testing.T) {
 
 func TestBuild_URLContext(t *testing.T) {
 	ctx := Context{Type: ContextURL, Value: "https://example.com/123", Content: "page body"}
-	p := Build("", StyleFormal, ctx)
+	p := Build("", "body", ctx)
 	if !strings.Contains(p, "https://example.com/123") {
 		t.Error("prompt should reference the URL")
 	}

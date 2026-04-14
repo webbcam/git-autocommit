@@ -208,6 +208,7 @@ Environment variables override config file values:
 | `GIT_AUTOCOMMIT_AGENT_TYPE` | Agent type |
 | `GIT_AUTOCOMMIT_AGENT_BINARY` | Agent binary (`claude` type only) |
 | `GIT_AUTOCOMMIT_MODEL` | Model name/ID |
+| `GIT_AUTOCOMMIT_TEMPLATE` | Template name or path (overridden by `--template` / `--short`) |
 | `ANTHROPIC_API_KEY` | API key for the `anthropic` agent type |
 | `OPENAI_API_KEY` | API key for the `openai` agent type |
 | `OPENCODE_GO_API_KEY` | API key for the `opencode-go` agent type |
@@ -222,12 +223,13 @@ git-autocommit [options]
 
 | Option | Description |
 |---|---|
-| `--formal` | Use the formal multi-section commit message template (default) |
-| `--informal` | Use a single-line commit message (max 72 characters) |
+| `--template <name-or-path>` | Use the named template or a path to a `.tmpl` file |
+| `--short` | Shorthand for `--template short` (single-line message) |
 | `--skip` | Skip the confirmation prompt and commit immediately |
 | `--squash VALUE` | Squash commits (see below) |
 | `--rewrite [REF]` | Rewrite an existing commit's message (see below) |
 | `--context VALUE` | Provide additional context to the AI (file path, URL, or plain string) |
+| `-v`, `--verbose` | Log the resolved template and its source before generating |
 | `-h`, `--help` | Print usage |
 
 ## Modes
@@ -271,34 +273,95 @@ git-autocommit --rewrite abc123        # rewrite by SHA
 
 When rewriting a non-HEAD commit, any uncommitted changes are stashed before the rebase and restored after.
 
-## Message styles
+## Commit message templates
 
-### Formal (default)
+`git-autocommit` uses template files to control the shape of the generated commit message. Two built-in templates are included; you can also write your own.
 
-A structured, multi-section message:
+### Built-in templates
 
-```
-<subject line, 80 chars max>
-
-<body: description of the solution/change>
-
-[Problem]
-<why this change is needed>
-
-[Test]
-<how it was tested or should be tested>
-
-[Ticket]
-<ticket URL — only included when available from context>
-```
-
-### Informal (`--informal`)
-
-A single-line message, maximum 72 characters.
+| Name | Description |
+|---|---|
+| `full` | Multi-section message with subject, body, Problem, Test, and Ticket sections. Used by default. |
+| `short` | Single-line message, 72 characters max. |
 
 ```sh
-git-autocommit --informal
+git-autocommit                           # uses full template (default)
+git-autocommit --short                   # uses short template
+git-autocommit --template conventional  # uses a named user template
+git-autocommit --template ./my.tmpl     # loads a template file directly
 ```
+
+### Template files
+
+A template is a `.tmpl` file with optional YAML frontmatter:
+
+```
+---
+name: conventional
+description: Conventional Commits format
+max_subject_length: 72
+---
+<type(scope): subject, {{ .MaxSubjectLength }} chars max>
+
+<body>
+
+<BREAKING CHANGE: description, if any>
+```
+
+Frontmatter fields:
+
+| Field | Default | Purpose |
+|---|---|---|
+| `name` | filename without `.tmpl` | Identifier for lookup |
+| `description` | `""` | Shown in `templates list` |
+| `max_subject_length` | `80` | Exposed as `{{ .MaxSubjectLength }}` in the body |
+
+Place custom templates in `~/.config/git-autocommit/templates/`. A user file with the same name as a built-in overrides it.
+
+### Listing and inspecting templates
+
+```sh
+git-autocommit templates list          # list all available templates
+git-autocommit templates show full     # print a template's contents
+```
+
+### Template resolution order
+
+The template is resolved using this precedence (most specific wins):
+
+1. `--template <name-or-path>` CLI flag
+2. `--short` CLI flag
+3. `GIT_AUTOCOMMIT_TEMPLATE` environment variable
+4. Repo-local `.git-autocommit.toml` `template` field
+5. Global config `[[project]]` rule matching the current repo
+6. Global config `default_template`
+7. Built-in `full`
+
+### Repo-local config (`.git-autocommit.toml`)
+
+Place a `.git-autocommit.toml` at your repo root (or anywhere between cwd and the root) to pin a template for that repo:
+
+```toml
+template = "conventional"
+```
+
+### Global config (`~/.config/git-autocommit/config.toml`)
+
+Add `default_template` and `[[project]]` rules to the global config:
+
+```toml
+default_template = "full"
+
+[[project]]
+match_remote = "github.com/myorg/*"
+template = "conventional"
+
+[[project]]
+match_path = "~/work/acme/**"
+template = "acme-jira"
+```
+
+Each `[[project]]` entry can match by `match_path` (glob against repo root absolute path, supports `~` and `**`) and/or `match_remote` (glob against the normalized `origin` remote URL). If both are set, both must match. Rules are evaluated in order; first match wins.
 
 ## Additional context (`--context VALUE`)
 

@@ -10,7 +10,16 @@ import (
 
 // Config holds the configuration for git-autocommit.
 type Config struct {
-	Agent AgentConfig `toml:"agent"`
+	Agent           AgentConfig   `toml:"agent"`
+	DefaultTemplate string        `toml:"default_template"`
+	Projects        []ProjectRule `toml:"project"`
+}
+
+// ProjectRule maps a repository (by path or remote URL glob) to a template.
+type ProjectRule struct {
+	MatchPath   string `toml:"match_path"`
+	MatchRemote string `toml:"match_remote"`
+	Template    string `toml:"template"`
 }
 
 // AgentConfig holds agent-specific configuration.
