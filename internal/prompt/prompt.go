@@ -37,7 +37,7 @@ func DetectContextType(value string) Context {
 	return Context{Type: ContextString, Value: value, Content: value}
 }
 
-// Build constructs the prompt to send to the AI agent.
+// Build constructs the prompt to send to the AI provider.
 //
 // diff is the output of the git diff/show command.
 // templateBody is the rendered commit message template (after variable substitution).

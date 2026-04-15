@@ -1,4 +1,4 @@
-package agent
+package provider
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestOpenCodeGoAgent_GenerateOpenAI(t *testing.T) {
+func TestOpenCodeGoProvider_GenerateOpenAI(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
@@ -41,12 +41,12 @@ func TestOpenCodeGoAgent_GenerateOpenAI(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// Patch the constant for testing by constructing the agent with a custom URL via direct struct.
+	// Patch the constant for testing by constructing the provider with a custom URL via direct struct.
 	// We test the routing and HTTP logic by temporarily replacing the URL constant is not possible,
-	// so instead we verify against a patched agent that overrides the URL field.
+	// so instead we verify against a patched provider that overrides the URL field.
 	// Since the URL is a package-level const, we test via an internal helper.
 	t.Run("default endpoint type routes to openai", func(t *testing.T) {
-		a := &OpenCodeGoAgent{APIKey: "test-key", Model: "kimi-k2.5", EndpointType: EndpointTypeOpenAI}
+		a := &OpenCodeGoProvider{APIKey: "test-key", Model: "kimi-k2.5", EndpointType: EndpointTypeOpenAI}
 		// We can't redirect the const URL without a server field, so verify the routing decision only.
 		if a.EndpointType != EndpointTypeOpenAI {
 			t.Errorf("expected openai endpoint type")
@@ -54,7 +54,7 @@ func TestOpenCodeGoAgent_GenerateOpenAI(t *testing.T) {
 	})
 
 	t.Run("empty endpoint type defaults to openai", func(t *testing.T) {
-		a := NewOpenCodeGoAgent("key", "kimi-k2.5", "")
+		a := NewOpenCodeGoProvider("key", "kimi-k2.5", "")
 		if a.EndpointType != EndpointTypeOpenAI {
 			t.Errorf("expected EndpointType to default to openai, got %q", a.EndpointType)
 		}
@@ -63,7 +63,7 @@ func TestOpenCodeGoAgent_GenerateOpenAI(t *testing.T) {
 	_ = srv // used below via direct HTTP call to verify request/response shapes
 }
 
-func TestOpenCodeGoAgent_GenerateOpenAI_HTTPShape(t *testing.T) {
+func TestOpenCodeGoProvider_GenerateOpenAI_HTTPShape(t *testing.T) {
 	var capturedReq opencodeGoOpenAIRequest
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +89,7 @@ func TestOpenCodeGoAgent_GenerateOpenAI_HTTPShape(t *testing.T) {
 	}
 	defer func() { http.DefaultClient = origClient }()
 
-	a := NewOpenCodeGoAgent("sk-test", "kimi-k2.5", EndpointTypeOpenAI)
+	a := NewOpenCodeGoProvider("sk-test", "kimi-k2.5", EndpointTypeOpenAI)
 	result, err := a.Generate("test prompt")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -105,7 +105,7 @@ func TestOpenCodeGoAgent_GenerateOpenAI_HTTPShape(t *testing.T) {
 	}
 }
 
-func TestOpenCodeGoAgent_GenerateAnthropic_HTTPShape(t *testing.T) {
+func TestOpenCodeGoProvider_GenerateAnthropic_HTTPShape(t *testing.T) {
 	var capturedReq opencodeGoAnthropicRequest
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +126,7 @@ func TestOpenCodeGoAgent_GenerateAnthropic_HTTPShape(t *testing.T) {
 	}
 	defer func() { http.DefaultClient = origClient }()
 
-	a := NewOpenCodeGoAgent("sk-test", "minimax-m2.7", EndpointTypeAnthropic)
+	a := NewOpenCodeGoProvider("sk-test", "minimax-m2.7", EndpointTypeAnthropic)
 	result, err := a.Generate("test prompt")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -139,7 +139,7 @@ func TestOpenCodeGoAgent_GenerateAnthropic_HTTPShape(t *testing.T) {
 	}
 }
 
-func TestOpenCodeGoAgent_APIError_OpenAI(t *testing.T) {
+func TestOpenCodeGoProvider_APIError_OpenAI(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(opencodeGoOpenAIResponse{
@@ -157,7 +157,7 @@ func TestOpenCodeGoAgent_APIError_OpenAI(t *testing.T) {
 	}
 	defer func() { http.DefaultClient = origClient }()
 
-	a := NewOpenCodeGoAgent("bad-key", "kimi-k2.5", EndpointTypeOpenAI)
+	a := NewOpenCodeGoProvider("bad-key", "kimi-k2.5", EndpointTypeOpenAI)
 	_, err := a.Generate("prompt")
 	if err == nil {
 		t.Fatal("expected error, got nil")

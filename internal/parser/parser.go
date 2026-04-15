@@ -19,7 +19,7 @@ func StripANSI(s string) string {
 	return ansiEscapeRe.ReplaceAllString(s, "")
 }
 
-// ExtractCommitMessage extracts the commit message from the agent output.
+// ExtractCommitMessage extracts the commit message from the provider output.
 // It strips ANSI codes, then finds text between the delimiters.
 // Returns an error if the delimiters are not found.
 func ExtractCommitMessage(raw string) (string, error) {

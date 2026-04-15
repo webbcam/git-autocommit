@@ -1,4 +1,4 @@
-package agent
+package provider
 
 import (
 	"bytes"
@@ -21,24 +21,24 @@ const (
 	EndpointTypeAnthropic = "anthropic"
 )
 
-// OpenCodeGoAgent implements the Agent interface using the OpenCode Go API directly.
-type OpenCodeGoAgent struct {
+// OpenCodeGoProvider implements the Provider interface using the OpenCode Go API directly.
+type OpenCodeGoProvider struct {
 	APIKey       string
 	Model        string
 	EndpointType string // "openai" or "anthropic"
 }
 
-// NewOpenCodeGoAgent creates a new OpenCodeGoAgent.
+// NewOpenCodeGoProvider creates a new OpenCodeGoProvider.
 // endpointType must be "openai" (default) or "anthropic".
-func NewOpenCodeGoAgent(apiKey, model, endpointType string) *OpenCodeGoAgent {
+func NewOpenCodeGoProvider(apiKey, model, endpointType string) *OpenCodeGoProvider {
 	if endpointType == "" {
 		endpointType = EndpointTypeOpenAI
 	}
-	return &OpenCodeGoAgent{APIKey: apiKey, Model: model, EndpointType: endpointType}
+	return &OpenCodeGoProvider{APIKey: apiKey, Model: model, EndpointType: endpointType}
 }
 
 // Generate sends the prompt to the OpenCode Go API and returns the response text.
-func (o *OpenCodeGoAgent) Generate(prompt string) (string, error) {
+func (o *OpenCodeGoProvider) Generate(prompt string) (string, error) {
 	switch o.EndpointType {
 	case EndpointTypeAnthropic:
 		return o.generateAnthropic(prompt)
@@ -50,8 +50,8 @@ func (o *OpenCodeGoAgent) Generate(prompt string) (string, error) {
 // openai-compatible types
 
 type opencodeGoOpenAIRequest struct {
-	Model               string                   `json:"model"`
-	MaxCompletionTokens int                      `json:"max_completion_tokens"`
+	Model               string                    `json:"model"`
+	MaxCompletionTokens int                       `json:"max_completion_tokens"`
 	Messages            []opencodeGoOpenAIMessage `json:"messages"`
 }
 
@@ -72,7 +72,7 @@ type opencodeGoOpenAIResponse struct {
 	} `json:"error"`
 }
 
-func (o *OpenCodeGoAgent) generateOpenAI(prompt string) (string, error) {
+func (o *OpenCodeGoProvider) generateOpenAI(prompt string) (string, error) {
 	reqBody := opencodeGoOpenAIRequest{
 		Model:               o.Model,
 		MaxCompletionTokens: 2048,
@@ -123,8 +123,8 @@ func (o *OpenCodeGoAgent) generateOpenAI(prompt string) (string, error) {
 // anthropic-compatible types
 
 type opencodeGoAnthropicRequest struct {
-	Model     string                      `json:"model"`
-	MaxTokens int                         `json:"max_tokens"`
+	Model     string                       `json:"model"`
+	MaxTokens int                          `json:"max_tokens"`
 	Messages  []opencodeGoAnthropicMessage `json:"messages"`
 }
 
@@ -144,7 +144,7 @@ type opencodeGoAnthropicResponse struct {
 	} `json:"error"`
 }
 
-func (o *OpenCodeGoAgent) generateAnthropic(prompt string) (string, error) {
+func (o *OpenCodeGoProvider) generateAnthropic(prompt string) (string, error) {
 	reqBody := opencodeGoAnthropicRequest{
 		Model:     o.Model,
 		MaxTokens: 2048,

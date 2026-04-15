@@ -1,10 +1,10 @@
 # git-autocommit
 
-A CLI tool that generates git commit messages using an AI agent, then performs the commit.
+A CLI tool that generates git commit messages using an AI provider, then performs the commit.
 
 ## How It Works
 
-`git-autocommit` runs the relevant git command to obtain the diff, constructs a prompt with the diff inlined, sends it to a configured AI agent, parses the generated message from the output, and performs the appropriate git operation.
+`git-autocommit` runs the relevant git command to obtain the diff, constructs a prompt with the diff inlined, sends it to a configured AI provider, parses the generated message from the output, and performs the appropriate git operation.
 
 ## Installation
 
@@ -33,9 +33,9 @@ Configuration is required — either a config file, environment variables, or bo
 
 Create `~/.config/git-autocommit/config.toml`.
 
-### Agent summary
+### Provider summary
 
-| Agent | Requires | `binary` | `model` | `api_key` | `base_url` | `endpoint_type` |
+| Provider | Requires | `binary` | `model` | `api_key` | `base_url` | `endpoint_type` |
 |---|---|---|---|---|---|---|
 | `claude` | [Claude Code](https://claude.ai/code) CLI | optional (`claude`) | optional | — | — | — |
 | `anthropic` | Anthropic API key | — | required | required* | — | — |
@@ -49,14 +49,14 @@ Create `~/.config/git-autocommit/config.toml`.
 
 † Can be set via the `OPENCODE_GO_API_KEY` environment variable.
 
-### Agent configuration
+### Provider configuration
 
 #### `claude` — Claude CLI
 
 Requires the [Claude Code](https://claude.ai/code) CLI on `$PATH`.
 
 ```toml
-[agent]
+[provider]
 type   = "claude"
 binary = "claude"
 model  = "sonnet"
@@ -73,7 +73,7 @@ model  = "sonnet"
 Calls the Anthropic Messages API directly. Requires an API key.
 
 ```toml
-[agent]
+[provider]
 type  = "anthropic"
 model = "claude-opus-4-6"
 # api_key = "sk-ant-..."  # or set ANTHROPIC_API_KEY env var
@@ -90,7 +90,7 @@ model = "claude-opus-4-6"
 Calls the OpenAI chat completions API (or any compatible provider). Requires an API key.
 
 ```toml
-[agent]
+[provider]
 type  = "openai"
 model = "gpt-4o"
 # api_key  = "sk-..."  # or set OPENAI_API_KEY env var
@@ -119,7 +119,7 @@ model = "gpt-4o"
 Example using OpenRouter:
 
 ```toml
-[agent]
+[provider]
 type     = "openai"
 model    = "anthropic/claude-sonnet-4-5"
 base_url = "https://openrouter.ai/api/v1/chat/completions"
@@ -131,7 +131,7 @@ base_url = "https://openrouter.ai/api/v1/chat/completions"
 Calls a locally running [Ollama](https://ollama.com) instance. No API key required.
 
 ```toml
-[agent]
+[provider]
 type  = "ollama"
 model = "qwen2.5-coder:3b"
 # base_url = "http://localhost:11434/v1/chat/completions"  # default
@@ -148,7 +148,7 @@ model = "qwen2.5-coder:3b"
 **Using Ollama on another machine on your local network:**
 
 ```toml
-[agent]
+[provider]
 type     = "ollama"
 model    = "qwen2.5-coder:3b"
 base_url = "http://192.168.1.50:11434/v1/chat/completions"
@@ -161,7 +161,7 @@ The remote machine must run Ollama with `OLLAMA_HOST=0.0.0.0 ollama serve` to ac
 Uses the [opencode](https://opencode.ai) CLI. Supports any provider/model that opencode is configured for.
 
 ```toml
-[agent]
+[provider]
 type   = "opencode"
 model  = "anthropic/claude-opus-4-6"
 # binary = "opencode"  # default
@@ -178,7 +178,7 @@ model  = "anthropic/claude-opus-4-6"
 Calls the [OpenCode Go](https://opencode.ai/docs/go/) API directly. Requires an API key (subscribe at [opencode.ai](https://opencode.ai/auth)).
 
 ```toml
-[agent]
+[provider]
 type          = "opencode-go"
 model         = "kimi-k2.5"
 # api_key     = "..."  # or set OPENCODE_GO_API_KEY env var
@@ -209,7 +209,7 @@ Available models and their required endpoint type:
 Uses the [kiro-cli](https://kiro.dev/docs/cli/). Model selection is configured globally in kiro-cli rather than per-invocation.
 
 ```toml
-[agent]
+[provider]
 type = "kiro"
 # binary = "kiro-cli"  # default
 ```
@@ -227,13 +227,13 @@ Environment variables override config file values:
 
 | Variable | Description |
 |---|---|
-| `GIT_AUTOCOMMIT_AGENT_TYPE` | Agent type |
-| `GIT_AUTOCOMMIT_AGENT_BINARY` | Agent binary (`claude` type only) |
+| `GIT_AUTOCOMMIT_PROVIDER_TYPE` | Provider type |
+| `GIT_AUTOCOMMIT_PROVIDER_BINARY` | Provider binary (`claude` type only) |
 | `GIT_AUTOCOMMIT_MODEL` | Model name/ID |
 | `GIT_AUTOCOMMIT_TEMPLATE` | Template name or path (overridden by `--template` / `--short`) |
-| `ANTHROPIC_API_KEY` | API key for the `anthropic` agent type |
-| `OPENAI_API_KEY` | API key for the `openai` agent type |
-| `OPENCODE_GO_API_KEY` | API key for the `opencode-go` agent type |
+| `ANTHROPIC_API_KEY` | API key for the `anthropic` provider type |
+| `OPENAI_API_KEY` | API key for the `openai` provider type |
+| `OPENCODE_GO_API_KEY` | API key for the `opencode-go` provider type |
 
 ## Usage
 
@@ -437,4 +437,4 @@ git push origin v0.x.x
 ## Prerequisites
 
 - `git` on `$PATH`
-- A configured AI agent (see [Configuration](#configuration))
+- A configured AI provider (see [Configuration](#configuration))

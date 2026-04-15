@@ -1,4 +1,4 @@
-package agent
+package provider
 
 import (
 	"bytes"
@@ -10,19 +10,19 @@ import (
 
 const openAIAPIURL = "https://api.openai.com/v1/chat/completions"
 
-// OpenAIAgent implements the Agent interface using the OpenAI-compatible chat completions API.
-type OpenAIAgent struct {
+// OpenAIProvider implements the Provider interface using the OpenAI-compatible chat completions API.
+type OpenAIProvider struct {
 	APIKey  string
 	Model   string
 	BaseURL string // defaults to openAIAPIURL; override for compatible providers
 }
 
-// NewOpenAIAgent creates a new OpenAIAgent with the given API key, model, and optional base URL.
-func NewOpenAIAgent(apiKey, model, baseURL string) *OpenAIAgent {
+// NewOpenAIProvider creates a new OpenAIProvider with the given API key, model, and optional base URL.
+func NewOpenAIProvider(apiKey, model, baseURL string) *OpenAIProvider {
 	if baseURL == "" {
 		baseURL = openAIAPIURL
 	}
-	return &OpenAIAgent{APIKey: apiKey, Model: model, BaseURL: baseURL}
+	return &OpenAIProvider{APIKey: apiKey, Model: model, BaseURL: baseURL}
 }
 
 type openAIRequest struct {
@@ -49,7 +49,7 @@ type openAIResponse struct {
 }
 
 // Generate sends the prompt to the OpenAI-compatible chat completions API and returns the response text.
-func (o *OpenAIAgent) Generate(prompt string) (string, error) {
+func (o *OpenAIProvider) Generate(prompt string) (string, error) {
 	reqBody := openAIRequest{
 		Model:               o.Model,
 		MaxCompletionTokens: 2048,

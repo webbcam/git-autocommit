@@ -1,4 +1,4 @@
-package agent
+package provider
 
 import (
 	"bytes"
@@ -10,19 +10,19 @@ import (
 
 const ollamaDefaultURL = "http://localhost:11434/v1/chat/completions"
 
-// OllamaAgent implements the Agent interface using a locally running Ollama instance.
+// OllamaProvider implements the Provider interface using a locally running Ollama instance.
 // Ollama exposes an OpenAI-compatible API; no API key is required.
-type OllamaAgent struct {
+type OllamaProvider struct {
 	Model   string
 	BaseURL string
 }
 
-// NewOllamaAgent creates an OllamaAgent. If baseURL is empty it defaults to localhost.
-func NewOllamaAgent(model, baseURL string) *OllamaAgent {
+// NewOllamaProvider creates an OllamaProvider. If baseURL is empty it defaults to localhost.
+func NewOllamaProvider(model, baseURL string) *OllamaProvider {
 	if baseURL == "" {
 		baseURL = ollamaDefaultURL
 	}
-	return &OllamaAgent{Model: model, BaseURL: baseURL}
+	return &OllamaProvider{Model: model, BaseURL: baseURL}
 }
 
 type ollamaRequest struct {
@@ -48,7 +48,7 @@ type ollamaResponse struct {
 }
 
 // Generate sends the prompt to the Ollama OpenAI-compatible endpoint and returns the response.
-func (o *OllamaAgent) Generate(prompt string) (string, error) {
+func (o *OllamaProvider) Generate(prompt string) (string, error) {
 	reqBody := ollamaRequest{
 		Model:     o.Model,
 		MaxTokens: 2048,

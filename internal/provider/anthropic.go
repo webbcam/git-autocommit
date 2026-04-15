@@ -1,4 +1,4 @@
-package agent
+package provider
 
 import (
 	"bytes"
@@ -11,15 +11,15 @@ import (
 const anthropicAPIURL = "https://api.anthropic.com/v1/messages"
 const anthropicVersion = "2023-06-01"
 
-// AnthropicAgent implements the Agent interface using the Anthropic Messages API directly.
-type AnthropicAgent struct {
+// AnthropicProvider implements the Provider interface using the Anthropic Messages API directly.
+type AnthropicProvider struct {
 	APIKey string
 	Model  string
 }
 
-// NewAnthropicAgent creates a new AnthropicAgent with the given API key and model.
-func NewAnthropicAgent(apiKey, model string) *AnthropicAgent {
-	return &AnthropicAgent{APIKey: apiKey, Model: model}
+// NewAnthropicProvider creates a new AnthropicProvider with the given API key and model.
+func NewAnthropicProvider(apiKey, model string) *AnthropicProvider {
+	return &AnthropicProvider{APIKey: apiKey, Model: model}
 }
 
 type anthropicRequest struct {
@@ -45,7 +45,7 @@ type anthropicResponse struct {
 }
 
 // Generate sends the prompt to the Anthropic Messages API and returns the response text.
-func (a *AnthropicAgent) Generate(prompt string) (string, error) {
+func (a *AnthropicProvider) Generate(prompt string) (string, error) {
 	reqBody := anthropicRequest{
 		Model:     a.Model,
 		MaxTokens: 2048,

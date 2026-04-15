@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/webbcam/git-autocommit/internal/agent"
 	"github.com/webbcam/git-autocommit/internal/config"
+	"github.com/webbcam/git-autocommit/internal/provider"
 )
 
 // ---- parseArgs tests ----
@@ -158,25 +158,25 @@ func TestParseArgs_TemplateAndShortMutuallyExclusive(t *testing.T) {
 
 // ---- Orchestration tests ----
 
-// stubAgent is a fake Agent implementation for orchestration tests.
-type stubAgent struct {
+// stubProvider is a fake Provider implementation for orchestration tests.
+type stubProvider struct {
 	msg            string
 	receivedPrompt string
 }
 
-func (s *stubAgent) Generate(p string) (string, error) {
+func (s *stubProvider) Generate(p string) (string, error) {
 	s.receivedPrompt = p
 	return "===COMMIT_MSG_START===\n" + s.msg + "\n===COMMIT_MSG_END===", nil
 }
 
-// testAgentFn returns a runDeps.agentFn that always returns stub.
-func testAgentFn(stub agent.Agent) func(*config.Config) (agent.Agent, error) {
-	return func(*config.Config) (agent.Agent, error) { return stub, nil }
+// testProviderFn returns a runDeps.providerFn that always returns stub.
+func testProviderFn(stub provider.Provider) func(*config.Config) (provider.Provider, error) {
+	return func(*config.Config) (provider.Provider, error) { return stub, nil }
 }
 
 // testCfg returns a minimal config that satisfies validation.
 func testCfg() *config.Config {
-	return &config.Config{Agent: config.AgentConfig{Type: "claude"}}
+	return &config.Config{Provider: config.ProviderConfig{Type: "claude"}}
 }
 
 // ---- test repo helpers ----
@@ -271,12 +271,12 @@ func TestRun_StandardCommit(t *testing.T) {
 	makeCommit(t, dir, "initial")
 	stageFile(t, dir, "new.txt", "hello")
 
-	stub := &stubAgent{msg: "Add greeting file"}
+	stub := &stubProvider{msg: "Add greeting file"}
 	if err := runWithDeps(runDeps{
-		args:    []string{"--skip"},
-		stdin:   strings.NewReader(""),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(stub),
+		args:       []string{"--skip"},
+		stdin:      strings.NewReader(""),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(stub),
 	}); err != nil {
 		t.Fatalf("runWithDeps: %v", err)
 	}
@@ -294,10 +294,10 @@ func TestRun_NoStagedChanges_Error(t *testing.T) {
 	makeCommit(t, dir, "initial")
 
 	err := runWithDeps(runDeps{
-		args:    []string{"--skip"},
-		stdin:   strings.NewReader(""),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(&stubAgent{msg: "anything"}),
+		args:       []string{"--skip"},
+		stdin:      strings.NewReader(""),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(&stubProvider{msg: "anything"}),
 	})
 	if err == nil {
 		t.Fatal("expected error for no staged changes")
@@ -313,12 +313,12 @@ func TestRun_ShortStyle_PromptMention(t *testing.T) {
 	makeCommit(t, dir, "initial")
 	stageFile(t, dir, "new.txt", "hello")
 
-	stub := &stubAgent{msg: "Add hello"}
+	stub := &stubProvider{msg: "Add hello"}
 	if err := runWithDeps(runDeps{
-		args:    []string{"--short", "--skip"},
-		stdin:   strings.NewReader(""),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(stub),
+		args:       []string{"--short", "--skip"},
+		stdin:      strings.NewReader(""),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(stub),
 	}); err != nil {
 		t.Fatalf("runWithDeps: %v", err)
 	}
@@ -334,10 +334,10 @@ func TestRun_TemplateAndShort_MutuallyExclusive(t *testing.T) {
 	makeCommit(t, dir, "initial")
 
 	err := runWithDeps(runDeps{
-		args:    []string{"--template", "full", "--short"},
-		stdin:   strings.NewReader(""),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(&stubAgent{msg: "msg"}),
+		args:       []string{"--template", "full", "--short"},
+		stdin:      strings.NewReader(""),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(&stubProvider{msg: "msg"}),
 	})
 	if err == nil {
 		t.Error("expected error for --template and --short together")
@@ -355,12 +355,12 @@ func TestRun_SquashN(t *testing.T) {
 	makeCommit(t, dir, "second")
 	makeCommit(t, dir, "third")
 
-	stub := &stubAgent{msg: "Squash three into one"}
+	stub := &stubProvider{msg: "Squash three into one"}
 	if err := runWithDeps(runDeps{
-		args:    []string{"--squash", "3", "--skip"},
-		stdin:   strings.NewReader(""),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(stub),
+		args:       []string{"--squash", "3", "--skip"},
+		stdin:      strings.NewReader(""),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(stub),
 	}); err != nil {
 		t.Fatalf("runWithDeps: %v", err)
 	}
@@ -379,12 +379,12 @@ func TestRun_SquashN_All(t *testing.T) {
 	makeCommit(t, dir, "second")
 	makeCommit(t, dir, "third")
 
-	stub := &stubAgent{msg: "Squash all three"}
+	stub := &stubProvider{msg: "Squash all three"}
 	if err := runWithDeps(runDeps{
-		args:    []string{"--squash", "3", "--skip"},
-		stdin:   strings.NewReader(""),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(stub),
+		args:       []string{"--squash", "3", "--skip"},
+		stdin:      strings.NewReader(""),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(stub),
 	}); err != nil {
 		t.Fatalf("runWithDeps: %v", err)
 	}
@@ -402,10 +402,10 @@ func TestRun_SquashN_NotEnoughCommits(t *testing.T) {
 	makeCommit(t, dir, "only commit")
 
 	err := runWithDeps(runDeps{
-		args:    []string{"--squash", "3", "--skip"},
-		stdin:   strings.NewReader(""),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(&stubAgent{msg: "unused"}),
+		args:       []string{"--squash", "3", "--skip"},
+		stdin:      strings.NewReader(""),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(&stubProvider{msg: "unused"}),
 	})
 	if err == nil {
 		t.Fatal("expected error for squash N with only 1 commit, got nil")
@@ -420,12 +420,12 @@ func TestRun_Rewrite(t *testing.T) {
 	makeCommit(t, dir, "base")
 	makeCommit(t, dir, "original message")
 
-	stub := &stubAgent{msg: "Rewritten message"}
+	stub := &stubProvider{msg: "Rewritten message"}
 	if err := runWithDeps(runDeps{
-		args:    []string{"--rewrite", "--skip"},
-		stdin:   strings.NewReader(""),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(stub),
+		args:       []string{"--rewrite", "--skip"},
+		stdin:      strings.NewReader(""),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(stub),
 	}); err != nil {
 		t.Fatalf("runWithDeps: %v", err)
 	}
@@ -443,12 +443,12 @@ func TestRun_ConfirmationAccepted(t *testing.T) {
 	makeCommit(t, dir, "initial")
 	stageFile(t, dir, "new.txt", "hello")
 
-	stub := &stubAgent{msg: "Add file"}
+	stub := &stubProvider{msg: "Add file"}
 	if err := runWithDeps(runDeps{
-		args:    []string{},
-		stdin:   strings.NewReader("y\n"),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(stub),
+		args:       []string{},
+		stdin:      strings.NewReader("y\n"),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(stub),
 	}); err != nil {
 		t.Fatalf("runWithDeps: %v", err)
 	}
@@ -465,10 +465,10 @@ func TestRun_ConfirmationRejected(t *testing.T) {
 	before := commitCount(t, dir)
 
 	_ = runWithDeps(runDeps{
-		args:    []string{},
-		stdin:   strings.NewReader("n\n"),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(&stubAgent{msg: "Add file"}),
+		args:       []string{},
+		stdin:      strings.NewReader("n\n"),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(&stubProvider{msg: "Add file"}),
 	})
 
 	if commitCount(t, dir) != before {
@@ -481,10 +481,10 @@ func TestRun_SquashAndRewrite_MutuallyExclusive(t *testing.T) {
 	makeCommit(t, dir, "initial")
 
 	err := runWithDeps(runDeps{
-		args:    []string{"--squash", "2", "--rewrite"},
-		stdin:   strings.NewReader(""),
-		cfg:     testCfg(),
-		agentFn: testAgentFn(&stubAgent{msg: "msg"}),
+		args:       []string{"--squash", "2", "--rewrite"},
+		stdin:      strings.NewReader(""),
+		cfg:        testCfg(),
+		providerFn: testProviderFn(&stubProvider{msg: "msg"}),
 	})
 	if err == nil {
 		t.Error("expected error for --squash and --rewrite together")

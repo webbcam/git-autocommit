@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/webbcam/git-autocommit/internal/agent"
 	"github.com/webbcam/git-autocommit/internal/config"
 	"github.com/webbcam/git-autocommit/internal/git"
 	"github.com/webbcam/git-autocommit/internal/parser"
 	"github.com/webbcam/git-autocommit/internal/prompt"
+	"github.com/webbcam/git-autocommit/internal/provider"
 	tmpl "github.com/webbcam/git-autocommit/internal/template"
 )
 
@@ -26,7 +26,7 @@ Usage:
   git-autocommit templates show <name>
 
 Commands:
-  config                      Interactive setup wizard to configure your AI agent
+  config                      Interactive setup wizard to configure your AI provider
   templates list              List all available templates
   templates show <name>       Print a template's contents
 
@@ -44,7 +44,7 @@ Environment variables:
   GIT_AUTOCOMMIT_TEMPLATE     Template name or path (overridden by --template / --short)
 
 Examples:
-  git-autocommit config                    # Set up your AI agent
+  git-autocommit config                    # Set up your AI provider
   git-autocommit                           # Commit staged changes (uses full template)
   git-autocommit --short                   # Single-line commit message
   git-autocommit --template conventional  # Use a named template
@@ -76,10 +76,10 @@ type options struct {
 // runDeps holds injectable dependencies for runWithDeps.
 // In production, run() provides real OS values. Tests inject stubs.
 type runDeps struct {
-	args    []string
-	stdin   io.Reader
-	cfg     *config.Config // if nil, config.Load() is called
-	agentFn func(*config.Config) (agent.Agent, error)
+	args       []string
+	stdin      io.Reader
+	cfg        *config.Config // if nil, config.Load() is called
+	providerFn func(*config.Config) (provider.Provider, error)
 }
 
 func printUsage() {
@@ -150,9 +150,9 @@ func run() error {
 		}
 	}
 	return runWithDeps(runDeps{
-		args:    args,
-		stdin:   os.Stdin,
-		agentFn: buildAgent,
+		args:       args,
+		stdin:      os.Stdin,
+		providerFn: buildProvider,
 	})
 }
 
@@ -273,20 +273,20 @@ func runWithDeps(deps runDeps) error {
 	// Build the prompt
 	p := prompt.Build(diff, templateBody, ctx)
 
-	// Create the agent
-	ag, err := deps.agentFn(cfg)
+	// Create the provider
+	prov, err := deps.providerFn(cfg)
 	if err != nil {
 		return err
 	}
 
 	// Generate the commit message
 	fmt.Fprintln(os.Stderr, "Generating commit message...")
-	raw, err := ag.Generate(p)
+	raw, err := prov.Generate(p)
 	if err != nil {
 		return err
 	}
 
-	// Parse the commit message from agent output
+	// Parse the commit message from provider output
 	msg, err := parser.ExtractCommitMessage(raw)
 	if err != nil {
 		return err
@@ -407,107 +407,107 @@ func runTemplatesShow(name string, out io.Writer) error {
 
 // fieldDef describes a single config field that the wizard should prompt for.
 type fieldDef struct {
-	label      string                            // prompt text
-	required   bool                              // re-prompt until non-empty when true
-	defaultVal string                            // shown in brackets; used when input is empty
-	set        func(*config.AgentConfig, string) // writes the value into the config
+	label      string                               // prompt text
+	required   bool                                 // re-prompt until non-empty when true
+	defaultVal string                               // shown in brackets; used when input is empty
+	set        func(*config.ProviderConfig, string) // writes the value into the config
 }
 
-// agentDef is a registry entry: wizard metadata + how to build the agent.
-type agentDef struct {
+// providerDef is a registry entry: wizard metadata + how to build the provider.
+type providerDef struct {
 	name   string
 	desc   string
 	fields []fieldDef
-	build  func(*config.Config) (agent.Agent, error)
+	build  func(*config.Config) (provider.Provider, error)
 }
 
-// agentRegistry is the single source of truth for all supported agents.
-var agentRegistry = []agentDef{
+// providerRegistry is the single source of truth for all supported providers.
+var providerRegistry = []providerDef{
 	{
 		name: "claude",
 		desc: "Claude CLI",
 		fields: []fieldDef{
-			{label: "Binary path", defaultVal: "claude", set: func(a *config.AgentConfig, v string) { a.Binary = v }},
-			{label: "Model", defaultVal: "sonnet", set: func(a *config.AgentConfig, v string) { a.Model = v }},
+			{label: "Binary path", defaultVal: "claude", set: func(p *config.ProviderConfig, v string) { p.Binary = v }},
+			{label: "Model", defaultVal: "sonnet", set: func(p *config.ProviderConfig, v string) { p.Model = v }},
 		},
-		build: func(cfg *config.Config) (agent.Agent, error) {
-			return agent.NewClaudeAgent(cfg.Agent.Binary, cfg.Agent.Model), nil
+		build: func(cfg *config.Config) (provider.Provider, error) {
+			return provider.NewClaudeProvider(cfg.Provider.Binary, cfg.Provider.Model), nil
 		},
 	},
 	{
 		name: "anthropic",
 		desc: "Anthropic API",
 		fields: []fieldDef{
-			{label: "API key", required: true, set: func(a *config.AgentConfig, v string) { a.APIKey = v }},
-			{label: "Model", defaultVal: "claude-sonnet-4-6", set: func(a *config.AgentConfig, v string) { a.Model = v }},
+			{label: "API key", required: true, set: func(p *config.ProviderConfig, v string) { p.APIKey = v }},
+			{label: "Model", defaultVal: "claude-sonnet-4-6", set: func(p *config.ProviderConfig, v string) { p.Model = v }},
 		},
-		build: func(cfg *config.Config) (agent.Agent, error) {
-			if cfg.Agent.APIKey == "" {
-				return nil, fmt.Errorf("anthropic agent requires an API key (set ANTHROPIC_API_KEY or api_key in config)")
+		build: func(cfg *config.Config) (provider.Provider, error) {
+			if cfg.Provider.APIKey == "" {
+				return nil, fmt.Errorf("anthropic provider requires an API key (set ANTHROPIC_API_KEY or api_key in config)")
 			}
-			return agent.NewAnthropicAgent(cfg.Agent.APIKey, cfg.Agent.Model), nil
+			return provider.NewAnthropicProvider(cfg.Provider.APIKey, cfg.Provider.Model), nil
 		},
 	},
 	{
 		name: "openai",
 		desc: "OpenAI API (or compatible)",
 		fields: []fieldDef{
-			{label: "API key", required: true, set: func(a *config.AgentConfig, v string) { a.APIKey = v }},
-			{label: "Model", defaultVal: "gpt-4o", set: func(a *config.AgentConfig, v string) { a.Model = v }},
-			{label: "Base URL (optional, press Enter for OpenAI default)", set: func(a *config.AgentConfig, v string) { a.BaseURL = v }},
+			{label: "API key", required: true, set: func(p *config.ProviderConfig, v string) { p.APIKey = v }},
+			{label: "Model", defaultVal: "gpt-4o", set: func(p *config.ProviderConfig, v string) { p.Model = v }},
+			{label: "Base URL (optional, press Enter for OpenAI default)", set: func(p *config.ProviderConfig, v string) { p.BaseURL = v }},
 		},
-		build: func(cfg *config.Config) (agent.Agent, error) {
-			if cfg.Agent.APIKey == "" {
-				return nil, fmt.Errorf("openai agent requires an API key (set OPENAI_API_KEY or api_key in config)")
+		build: func(cfg *config.Config) (provider.Provider, error) {
+			if cfg.Provider.APIKey == "" {
+				return nil, fmt.Errorf("openai provider requires an API key (set OPENAI_API_KEY or api_key in config)")
 			}
-			return agent.NewOpenAIAgent(cfg.Agent.APIKey, cfg.Agent.Model, cfg.Agent.BaseURL), nil
+			return provider.NewOpenAIProvider(cfg.Provider.APIKey, cfg.Provider.Model, cfg.Provider.BaseURL), nil
 		},
 	},
 	{
 		name: "ollama",
 		desc: "Ollama (local)",
 		fields: []fieldDef{
-			{label: "Model", required: true, set: func(a *config.AgentConfig, v string) { a.Model = v }},
-			{label: "Base URL", defaultVal: "http://localhost:11434/v1/chat/completions", set: func(a *config.AgentConfig, v string) { a.BaseURL = v }},
+			{label: "Model", required: true, set: func(p *config.ProviderConfig, v string) { p.Model = v }},
+			{label: "Base URL", defaultVal: "http://localhost:11434/v1/chat/completions", set: func(p *config.ProviderConfig, v string) { p.BaseURL = v }},
 		},
-		build: func(cfg *config.Config) (agent.Agent, error) {
-			return agent.NewOllamaAgent(cfg.Agent.Model, cfg.Agent.BaseURL), nil
+		build: func(cfg *config.Config) (provider.Provider, error) {
+			return provider.NewOllamaProvider(cfg.Provider.Model, cfg.Provider.BaseURL), nil
 		},
 	},
 	{
 		name: "opencode",
 		desc: "OpenCode CLI",
 		fields: []fieldDef{
-			{label: "Binary path", defaultVal: "opencode", set: func(a *config.AgentConfig, v string) { a.Binary = v }},
-			{label: "Model (optional, press Enter to skip)", set: func(a *config.AgentConfig, v string) { a.Model = v }},
+			{label: "Binary path", defaultVal: "opencode", set: func(p *config.ProviderConfig, v string) { p.Binary = v }},
+			{label: "Model (optional, press Enter to skip)", set: func(p *config.ProviderConfig, v string) { p.Model = v }},
 		},
-		build: func(cfg *config.Config) (agent.Agent, error) {
-			return agent.NewOpenCodeAgent(cfg.Agent.Binary, cfg.Agent.Model), nil
+		build: func(cfg *config.Config) (provider.Provider, error) {
+			return provider.NewOpenCodeProvider(cfg.Provider.Binary, cfg.Provider.Model), nil
 		},
 	},
 	{
 		name: "opencode-go",
 		desc: "OpenCode Go (direct API)",
 		fields: []fieldDef{
-			{label: "API key", required: true, set: func(a *config.AgentConfig, v string) { a.APIKey = v }},
-			{label: "Model (e.g. kimi-k2.5, glm-5.1, minimax-m2.7)", defaultVal: "kimi-k2.5", set: func(a *config.AgentConfig, v string) { a.Model = v }},
-			{label: "Endpoint type — openai (default) or anthropic (for minimax models)", defaultVal: "openai", set: func(a *config.AgentConfig, v string) { a.EndpointType = v }},
+			{label: "API key", required: true, set: func(p *config.ProviderConfig, v string) { p.APIKey = v }},
+			{label: "Model (e.g. kimi-k2.5, glm-5.1, minimax-m2.7)", defaultVal: "kimi-k2.5", set: func(p *config.ProviderConfig, v string) { p.Model = v }},
+			{label: "Endpoint type — openai (default) or anthropic (for minimax models)", defaultVal: "openai", set: func(p *config.ProviderConfig, v string) { p.EndpointType = v }},
 		},
-		build: func(cfg *config.Config) (agent.Agent, error) {
-			if cfg.Agent.APIKey == "" {
-				return nil, fmt.Errorf("opencode-go agent requires an API key (set OPENCODE_GO_API_KEY or api_key in config)")
+		build: func(cfg *config.Config) (provider.Provider, error) {
+			if cfg.Provider.APIKey == "" {
+				return nil, fmt.Errorf("opencode-go provider requires an API key (set OPENCODE_GO_API_KEY or api_key in config)")
 			}
-			return agent.NewOpenCodeGoAgent(cfg.Agent.APIKey, cfg.Agent.Model, cfg.Agent.EndpointType), nil
+			return provider.NewOpenCodeGoProvider(cfg.Provider.APIKey, cfg.Provider.Model, cfg.Provider.EndpointType), nil
 		},
 	},
 	{
 		name: "kiro",
 		desc: "Kiro CLI",
 		fields: []fieldDef{
-			{label: "Binary path", defaultVal: "kiro", set: func(a *config.AgentConfig, v string) { a.Binary = v }},
+			{label: "Binary path", defaultVal: "kiro", set: func(p *config.ProviderConfig, v string) { p.Binary = v }},
 		},
-		build: func(cfg *config.Config) (agent.Agent, error) {
-			return agent.NewKiroAgent(cfg.Agent.Binary), nil
+		build: func(cfg *config.Config) (provider.Provider, error) {
+			return provider.NewKiroProvider(cfg.Provider.Binary), nil
 		},
 	},
 }
@@ -516,20 +516,20 @@ var agentRegistry = []agentDef{
 func runConfig(stdin io.Reader, stdout io.Writer) error {
 	reader := bufio.NewReader(stdin)
 
-	fmt.Fprintln(stdout, "Select agent type:")
-	for i, def := range agentRegistry {
+	fmt.Fprintln(stdout, "Select provider type:")
+	for i, def := range providerRegistry {
 		fmt.Fprintf(stdout, "  %d. %-12s %s\n", i+1, def.name, def.desc)
 	}
-	fmt.Fprintf(stdout, "Enter choice [1-%d]: ", len(agentRegistry))
+	fmt.Fprintf(stdout, "Enter choice [1-%d]: ", len(providerRegistry))
 	line, _ := reader.ReadString('\n')
 	choice, err := strconv.Atoi(strings.TrimSpace(line))
-	if err != nil || choice < 1 || choice > len(agentRegistry) {
+	if err != nil || choice < 1 || choice > len(providerRegistry) {
 		return fmt.Errorf("invalid choice")
 	}
 
-	def := agentRegistry[choice-1]
+	def := providerRegistry[choice-1]
 	cfg := &config.Config{}
-	cfg.Agent.Type = def.name
+	cfg.Provider.Type = def.name
 
 	fmt.Fprintln(stdout)
 	for _, field := range def.fields {
@@ -551,7 +551,7 @@ func runConfig(stdin io.Reader, stdout io.Writer) error {
 			}
 			break
 		}
-		field.set(&cfg.Agent, val)
+		field.set(&cfg.Provider, val)
 	}
 
 	if err := config.Save(cfg); err != nil {
@@ -563,14 +563,14 @@ func runConfig(stdin io.Reader, stdout io.Writer) error {
 	return nil
 }
 
-// buildAgent constructs the Agent from config using the registry.
-func buildAgent(cfg *config.Config) (agent.Agent, error) {
-	for _, def := range agentRegistry {
-		if strings.EqualFold(def.name, cfg.Agent.Type) {
+// buildProvider constructs the Provider from config using the registry.
+func buildProvider(cfg *config.Config) (provider.Provider, error) {
+	for _, def := range providerRegistry {
+		if strings.EqualFold(def.name, cfg.Provider.Type) {
 			return def.build(cfg)
 		}
 	}
-	return nil, fmt.Errorf("unsupported agent type: %s", cfg.Agent.Type)
+	return nil, fmt.Errorf("unsupported provider type: %s", cfg.Provider.Type)
 }
 
 // handleStandard handles the default commit mode.

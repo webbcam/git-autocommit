@@ -10,7 +10,7 @@ import (
 
 // Config holds the configuration for git-autocommit.
 type Config struct {
-	Agent           AgentConfig   `toml:"agent"`
+	Provider        ProviderConfig `toml:"provider"`
 	DefaultTemplate string        `toml:"default_template"`
 	Projects        []ProjectRule `toml:"project"`
 }
@@ -22,8 +22,8 @@ type ProjectRule struct {
 	Template    string `toml:"template"`
 }
 
-// AgentConfig holds agent-specific configuration.
-type AgentConfig struct {
+// ProviderConfig holds provider-specific configuration.
+type ProviderConfig struct {
 	Type         string `toml:"type"`
 	Binary       string `toml:"binary"`
 	Model        string `toml:"model"`
@@ -49,46 +49,46 @@ func Load() (*Config, error) {
 	}
 
 	// Apply environment variable overrides
-	if v := os.Getenv("GIT_AUTOCOMMIT_AGENT_TYPE"); v != "" {
-		cfg.Agent.Type = v
+	if v := os.Getenv("GIT_AUTOCOMMIT_PROVIDER_TYPE"); v != "" {
+		cfg.Provider.Type = v
 	}
-	if v := os.Getenv("GIT_AUTOCOMMIT_AGENT_BINARY"); v != "" {
-		cfg.Agent.Binary = v
+	if v := os.Getenv("GIT_AUTOCOMMIT_PROVIDER_BINARY"); v != "" {
+		cfg.Provider.Binary = v
 	}
 	if v := os.Getenv("GIT_AUTOCOMMIT_MODEL"); v != "" {
-		cfg.Agent.Model = v
+		cfg.Provider.Model = v
 	}
-	if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" && cfg.Agent.APIKey == "" {
-		cfg.Agent.APIKey = v
+	if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" && cfg.Provider.APIKey == "" {
+		cfg.Provider.APIKey = v
 	}
-	if v := os.Getenv("OPENAI_API_KEY"); v != "" && cfg.Agent.APIKey == "" {
-		cfg.Agent.APIKey = v
+	if v := os.Getenv("OPENAI_API_KEY"); v != "" && cfg.Provider.APIKey == "" {
+		cfg.Provider.APIKey = v
 	}
-	if v := os.Getenv("OPENCODE_GO_API_KEY"); v != "" && cfg.Agent.APIKey == "" {
-		cfg.Agent.APIKey = v
+	if v := os.Getenv("OPENCODE_GO_API_KEY"); v != "" && cfg.Provider.APIKey == "" {
+		cfg.Provider.APIKey = v
 	}
 
 	// Validate required fields
-	if cfg.Agent.Type == "" && cfg.Agent.Binary == "" && cfg.Agent.Model == "" {
+	if cfg.Provider.Type == "" && cfg.Provider.Binary == "" && cfg.Provider.Model == "" {
 		return nil, fmt.Errorf(
 			"no configuration found. Run 'git-autocommit config' or create %s manually.\n"+
 				"Environment variable overrides:\n"+
-				"  GIT_AUTOCOMMIT_AGENT_TYPE\n"+
-				"  GIT_AUTOCOMMIT_AGENT_BINARY\n"+
+				"  GIT_AUTOCOMMIT_PROVIDER_TYPE\n"+
+				"  GIT_AUTOCOMMIT_PROVIDER_BINARY\n"+
 				"  GIT_AUTOCOMMIT_MODEL",
 			configPath,
 		)
 	}
 
 	// Apply defaults for any still-missing fields
-	if cfg.Agent.Type == "" {
-		cfg.Agent.Type = "claude"
+	if cfg.Provider.Type == "" {
+		cfg.Provider.Type = "claude"
 	}
-	if cfg.Agent.Binary == "" {
-		cfg.Agent.Binary = "claude"
+	if cfg.Provider.Binary == "" {
+		cfg.Provider.Binary = "claude"
 	}
-	if cfg.Agent.Model == "" {
-		cfg.Agent.Model = "sonnet"
+	if cfg.Provider.Model == "" {
+		cfg.Provider.Model = "sonnet"
 	}
 
 	return cfg, nil
