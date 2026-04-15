@@ -43,7 +43,7 @@ Create `~/.config/git-autocommit/config.toml`.
 | `ollama` | [Ollama](https://ollama.com) running locally | — | required | — | optional | — |
 | `opencode` | [opencode](https://opencode.ai) CLI | optional (`opencode`) | required | — | — | — |
 | `opencode-go` | [OpenCode Go](https://opencode.ai/docs/go/) API key | — | required | required† | — | optional (`openai`) |
-| `kiro` | [kiro-cli](https://kiro.dev/docs/cli/) | optional (`kiro-cli`) | — | — | — | — |
+| `kiro` | [kiro-cli](https://kiro.dev/docs/cli/) | optional (`kiro-cli`) | optional | — | — | — |
 
 \* Can be set via environment variable instead (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
 
@@ -206,20 +206,20 @@ Available models and their required endpoint type:
 
 #### `kiro` — Kiro CLI
 
-Uses the [kiro-cli](https://kiro.dev/docs/cli/). Model selection is configured globally in kiro-cli rather than per-invocation.
+Uses the [kiro-cli](https://kiro.dev/docs/cli/).
 
 ```toml
 [provider]
 type = "kiro"
 # binary = "kiro-cli"  # default
+# model = "claude-sonnet-4-5"  # optional; omit to use kiro's configured default
 ```
 
 | Field | Description |
 |---|---|
 | `type` | `kiro` |
 | `binary` | Path to the kiro-cli binary. Defaults to `kiro-cli` (must be on `$PATH`). |
-
-> **Note:** To change the model used by kiro, run `kiro-cli settings chat.defaultModel <model>`.
+| `model` | Model to pass via `--model`. Optional — omit to use kiro's configured default. |
 
 ### Environment variables
 
