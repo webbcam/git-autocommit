@@ -6,15 +6,14 @@ import (
 )
 
 // KiroProvider implements the Provider interface using the kiro-cli.
-// Model selection is not supported per-invocation; configure it globally
-// with: kiro-cli settings chat.defaultModel <model>
 type KiroProvider struct {
 	Binary string
+	Model  string
 }
 
-// NewKiroProvider creates a new KiroProvider with the given binary path.
-func NewKiroProvider(binary string) *KiroProvider {
-	return &KiroProvider{Binary: binary}
+// NewKiroProvider creates a new KiroProvider with the given binary path and optional model.
+func NewKiroProvider(binary, model string) *KiroProvider {
+	return &KiroProvider{Binary: binary, Model: model}
 }
 
 // Generate invokes kiro-cli in non-interactive mode with the given prompt and returns the raw output.
@@ -22,8 +21,11 @@ func (k *KiroProvider) Generate(prompt string) (string, error) {
 	args := []string{
 		"chat",
 		"--no-interactive",
-		prompt,
 	}
+	if k.Model != "" {
+		args = append(args, "--model", k.Model)
+	}
+	args = append(args, prompt)
 
 	cmd := exec.Command(k.Binary, args...)
 	out, err := cmd.Output()

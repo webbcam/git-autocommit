@@ -505,9 +505,10 @@ var providerRegistry = []providerDef{
 		desc: "Kiro CLI",
 		fields: []fieldDef{
 			{label: "Binary path", defaultVal: "kiro", set: func(p *config.ProviderConfig, v string) { p.Binary = v }},
+			{label: "Model (optional, press Enter to skip)", set: func(p *config.ProviderConfig, v string) { p.Model = v }},
 		},
 		build: func(cfg *config.Config) (provider.Provider, error) {
-			return provider.NewKiroProvider(cfg.Provider.Binary), nil
+			return provider.NewKiroProvider(cfg.Provider.Binary, cfg.Provider.Model), nil
 		},
 	},
 }
