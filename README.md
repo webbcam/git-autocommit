@@ -114,6 +114,7 @@ model = "gpt-4o"
 | [xAI (Grok)](https://x.ai) | `https://api.x.ai/v1/chat/completions` | `grok-3` |
 | [DeepSeek](https://deepseek.com) | `https://api.deepseek.com/v1/chat/completions` | `deepseek-chat` |
 | [Together AI](https://together.ai) | `https://api.together.xyz/v1/chat/completions` | `meta-llama/Llama-3-70b-chat-hf` |
+| [AWS Bedrock](https://aws.amazon.com/bedrock/) | `https://bedrock-runtime.{region}.amazonaws.com/openai/v1/chat/completions` | `amazon.nova-pro-v1:0` |
 | [LM Studio](https://lmstudio.ai) (local) | `http://localhost:1234/v1/chat/completions` | _(set in LM Studio)_ |
 
 Example using OpenRouter:
@@ -124,6 +125,16 @@ type     = "openai"
 model    = "anthropic/claude-sonnet-4-5"
 base_url = "https://openrouter.ai/api/v1/chat/completions"
 # api_key = "sk-or-..."  # or set OPENAI_API_KEY env var
+```
+
+Example using AWS Bedrock (requires a [Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html), not an AWS access key):
+
+```toml
+[provider]
+type     = "openai"
+model    = "amazon.nova-pro-v1:0"
+base_url = "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/chat/completions"
+# api_key = "..."  # Bedrock API key
 ```
 
 #### `ollama` — Ollama (local or network)
