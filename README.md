@@ -102,7 +102,29 @@ model = "gpt-4o"
 | `type` | `openai` |
 | `model` | Model ID (e.g. `gpt-4o`, `gpt-4-turbo`). |
 | `api_key` | API key. Falls back to the `OPENAI_API_KEY` environment variable. |
-| `base_url` | API endpoint. Defaults to `https://api.openai.com/v1/chat/completions`. Override to use any OpenAI-compatible provider (e.g. Mistral). |
+| `base_url` | API endpoint. Defaults to `https://api.openai.com/v1/chat/completions`. Override to use any OpenAI-compatible provider. |
+
+**Compatible providers via `base_url`:**
+
+| Provider | `base_url` | `model` example |
+|---|---|---|
+| [OpenRouter](https://openrouter.ai) | `https://openrouter.ai/api/v1/chat/completions` | `anthropic/claude-sonnet-4-5` |
+| [Mistral](https://mistral.ai) | `https://api.mistral.ai/v1/chat/completions` | `mistral-large-latest` |
+| [Groq](https://groq.com) | `https://api.groq.com/openai/v1/chat/completions` | `llama-3.3-70b-versatile` |
+| [xAI (Grok)](https://x.ai) | `https://api.x.ai/v1/chat/completions` | `grok-3` |
+| [DeepSeek](https://deepseek.com) | `https://api.deepseek.com/v1/chat/completions` | `deepseek-chat` |
+| [Together AI](https://together.ai) | `https://api.together.xyz/v1/chat/completions` | `meta-llama/Llama-3-70b-chat-hf` |
+| [LM Studio](https://lmstudio.ai) (local) | `http://localhost:1234/v1/chat/completions` | _(set in LM Studio)_ |
+
+Example using OpenRouter:
+
+```toml
+[agent]
+type     = "openai"
+model    = "anthropic/claude-sonnet-4-5"
+base_url = "https://openrouter.ai/api/v1/chat/completions"
+# api_key = "sk-or-..."  # or set OPENAI_API_KEY env var
+```
 
 #### `ollama` — Ollama (local or network)
 
